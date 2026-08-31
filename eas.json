@@ -1,0 +1,36 @@
+{
+  "cli": {
+    "version": ">= 16.31.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "SENTRY_AUTH_TOKEN": "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"
+      }
+    },
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      },
+      "distribution": "internal",
+      "env": {
+        "SENTRY_AUTH_TOKEN": "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"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "autoIncrement": true,
+      "env": {
+        "SENTRY_AUTH_TOKEN": "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"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

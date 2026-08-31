@@ -1,0 +1,40 @@
+diff --git a/node_modules/react-native-wagmi-charts/src/charts/candle/useCandleData.ts b/node_modules/react-native-wagmi-charts/src/charts/candle/useCandleData.ts
+index 5321ec4..e9b2dcc 100644
+--- a/node_modules/react-native-wagmi-charts/src/charts/candle/useCandleData.ts
++++ b/node_modules/react-native-wagmi-charts/src/charts/candle/useCandleData.ts
+@@ -10,7 +10,8 @@ export function useCandleData(): Readonly<SharedValue<TCandle>> {
+     if (currentX.value === -1) {
+       return { timestamp: -1, low: -1, open: -1, high: -1, close: -1 };
+     }
+-    return data[Math.floor(currentX.value / step)] as TCandle;
++    const index = Math.min(Math.max(0, Math.floor(currentX.value / step)), data.length - 1);
++    return (data[index] as TCandle) || { timestamp: -1, low: -1, open: -1, high: -1, close: -1 };
+   }, [currentX, data, step]);
+ 
+   return candle;
+diff --git a/node_modules/react-native-wagmi-charts/src/charts/candle/useDatetime.ts b/node_modules/react-native-wagmi-charts/src/charts/candle/useDatetime.ts
+index 5a8c44d..f7b763b 100644
+--- a/node_modules/react-native-wagmi-charts/src/charts/candle/useDatetime.ts
++++ b/node_modules/react-native-wagmi-charts/src/charts/candle/useDatetime.ts
+@@ -20,7 +20,7 @@ export function useCandlestickChartDatetime({
+   const candle = useCandleData();
+ 
+   const timestamp = useDerivedValue(() => {
+-    return candle.value.timestamp;
++    return candle.value ? candle.value.timestamp : -1;
+   });
+ 
+   const timestampString = useDerivedValue(() => {
+diff --git a/node_modules/react-native-wagmi-charts/src/charts/candle/usePrice.ts b/node_modules/react-native-wagmi-charts/src/charts/candle/usePrice.ts
+index ed5216d..47f7a91 100644
+--- a/node_modules/react-native-wagmi-charts/src/charts/candle/usePrice.ts
++++ b/node_modules/react-native-wagmi-charts/src/charts/candle/usePrice.ts
+@@ -33,7 +33,7 @@ export function useCandlestickChartPrice({
+         maxHeight: height,
+       });
+     } else {
+-      price = candle.value[type];
++      price = candle.value ? candle.value[type] : -1;
+     }
+ 
+     if (price === -1) return '';

@@ -1,0 +1,2 @@
+
+export const FETCH_PRICES_INTERVAL = 30000;

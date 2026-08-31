@@ -1,0 +1,60 @@
+# # ================================
+# # App Environment
+# # ================================
+# # EXPO_PUBLIC_ENVIRONMENT=development
+
+# # ================================
+# # Alchemy API Keys (Shared)
+# # ================================
+# # EXPO_PUBLIC_ALCHEMY_API_KEY=iQ_8RwrWNQWD7MLe5YNZJ
+# # ================================
+# # Ethereum (Sepolia / Mainnet)
+# # ================================
+# # EXPO_PUBLIC_ALCHEMY_ETH_KEY=iQ_8RwrWNQWD7MLe5YNZJ
+
+# EXPO_PUBLIC_ALCHEMY_ETH_URL=https://eth-sepolia.g.alchemy.com/v2/iQ_8RwrWNQWD7MLe5YNZJ
+# EXPO_PUBLIC_ALCHEMY_ETH_MAINNET_URL=https://eth-mainnet.g.alchemy.com/v2/iQ_8RwrWNQWD7MLe5YNZJ
+
+# EXPO_PUBLIC_ALCHEMY_ETH_SOCKET_URL=wss://eth-sepolia.g.alchemy.com/v2/iQ_8RwrWNQWD7MLe5YNZJ
+# EXPO_PUBLIC_ALCHEMY_ETH_MAINNET_SOCKET_URL=wss://eth-mainnet.g.alchemy.com/v2/iQ_8RwrWNQWD7MLe5YNZJ
+
+
+# # ================================
+# # Polygon
+# # ================================
+# EXPO_PUBLIC_ALCHEMY_POLYGON_URL=https://polygon-mainnet.g.alchemy.com/v2/iQ_8RwrWNQWD7MLe5YNZJ
+# EXPO_PUBLIC_ALCHEMY_POLYGON_SOCKET_URL=wss://polygon-mainnet.g.alchemy.com/v2/iQ_8RwrWNQWD7MLe5YNZJ
+
+
+# # ================================
+# # Arbitrum
+# # ================================
+# EXPO_PUBLIC_ALCHEMY_ARBITRUM_URL=https://arb-mainnet.g.alchemy.com/v2/iQ_8RwrWNQWD7MLe5YNZJ
+# EXPO_PUBLIC_ALCHEMY_ARBITRUM_SOCKET_URL=wss://arb-mainnet.g.alchemy.com/v2/iQ_8RwrWNQWD7MLe5YNZJ
+
+
+# # ================================
+# # Optimism 
+# # ================================
+# EXPO_PUBLIC_ALCHEMY_OPTIMISM_URL=https://opt-mainnet.g.alchemy.com/v2/iQ_8RwrWNQWD7MLe5YNZJ
+# EXPO_PUBLIC_ALCHEMY_OPTIMISM_SOCKET_URL=wss://opt-mainnet.g.alchemy.com/v2/iQ_8RwrWNQWD7MLe5YNZJ
+
+
+# # ================================
+# # BSC (Binance Smart Chain)
+# # (Alchemy does NOT support BSC)
+# # ================================
+# EXPO_PUBLIC_BSC_RPC_URL=https://bsc-dataseed.binance.org/
+# EXPO_PUBLIC_BSC_TESTNET_RPC_URL=https://data-seed-prebsc-1-s1.binance.org:8545/
+
+
+# # ================================
+# # Solana (Alchemy)
+# # ================================
+# # EXPO_PUBLIC_ALCHEMY_SOL_API_KEY=iQ_8RwrWNQWD7MLe5YNZJ
+
+# # EXPO_PUBLIC_ALCHEMY_SOL_URL=https://solana-devnet.g.alchemy.com/v2/
+# # EXPO_PUBLIC_ALCHEMY_SOL_MAINNET_URL=https://solana-mainnet.g.alchemy.com/v2/
+
+# # EXPO_PUBLIC_ALCHEMY_SOL_SOCKET_URL=wss://solana-devnet.g.alchemy.com/v2/
+# # EXPO_PUBLIC_ALCHEMY_SOL_MAINNET_SOCKET_URL=wss://solana-mainnet.g.alchemy.com/v2/
