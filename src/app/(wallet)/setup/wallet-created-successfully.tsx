@@ -1,15 +1,17 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { BackHandler, SafeAreaView } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import styled, { useTheme } from "styled-components/native";
+import { useDispatch, useSelector } from "react-redux";
+import { MotiView } from "moti";
+import { useIsFocused } from "expo-router/react-navigation";
+
 import Button from "../../../components/Button/Button";
 import { LinearGradientBackground } from "../../../components/Styles/Gradient";
 import { ThemeType } from "../../../styles/theme";
-import { ROUTES } from "../../../constants/routes";
 import CheckMark from "../../../assets/svg/check-mark.svg";
 import ShieldCheckIcon from "../../../assets/svg/shield-check.svg";
-import { MotiView } from "moti";
-import { useIsFocused } from "expo-router/react-navigation";
+import { RootState } from "../../../store";
 
 const SafeAreaContainer = styled(SafeAreaView)<{ theme: ThemeType }>`
   flex: 1;
@@ -69,11 +71,17 @@ const ButtonContainer = styled.View<{ theme: ThemeType }>`
 export default function WalletCreationSuccessPage() {
   const { successState } = useLocalSearchParams();
   const theme = useTheme();
+  const dispatch = useDispatch();
   const isFocused = useIsFocused();
+
+  const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState("You're All Set!");
   const [subtitle, setSubtitle] = useState(
     "Your new multichain wallet is ready. Let's start tracking and securing your assets."
   );
+
+  const chainId = useSelector((state: RootState) => state.ethereum.activeChainId);
+  const globalAddresses = useSelector((state: RootState) => state.ethereum.globalAddresses);
 
   useEffect(() => {
     if (successState === "import") {
@@ -89,6 +97,10 @@ export default function WalletCreationSuccessPage() {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => true);
     return () => sub.remove();
   }, [isFocused]);
+
+  const handleContinue = () => {
+    router.push("/(wallet)/setup/set-password");
+  };
 
   return (
     <LinearGradientBackground colors={theme.colors.primaryLinearGradient}>
@@ -158,7 +170,9 @@ export default function WalletCreationSuccessPage() {
             <Button
               backgroundColor={theme.colors.primary}
               color={theme.colors.realWhite}
-              onPress={() => router.push(ROUTES.setPassword)}
+              loading={loading}
+              disabled={loading}
+              onPress={handleContinue}
               title="Continue"
               icon={<CheckMark width={20} height={20} fill={theme.colors.realWhite} />}
             />

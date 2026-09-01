@@ -15,9 +15,7 @@ import { persistStore, persistReducer, createTransform } from "redux-persist";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { formatEther } from "ethers";
 
-import ethereumReducer, {
-  updateBalance,
-} from "./ethereumSlice";
+import ethereumReducer from "./ethereumSlice";
 import biometricsReducer from "./biometricsSlice";
 import { evmServices, registerEvmService } from "../services/EthereumService";
 
@@ -145,21 +143,13 @@ export const evmWebSocketMiddleware: Middleware =
           }
         }
 
-        // Only dispatch if balance actually changed (prevents unnecessary re-renders)
+        // Only dispatch if balance actually changed
         const newBalance = Number(formatEther(balance));
         const currentState = store.getState() as any;
         const currentBalance = currentState.ethereum.globalAddresses?.[index]?.balanceByChain?.[chainId];
         if (currentBalance === newBalance) return; // Skip — no change
 
         lastBlockDispatch.set(chainId, Date.now());
-
-        store.dispatch(
-          updateBalance({
-            chainId,
-            address,
-            balance: newBalance,
-          })
-        );
       } catch (e: any) {
         if (!e.message?.includes("block with number")) {
           console.warn("EVM WS balance sync warning:", e.message || e);

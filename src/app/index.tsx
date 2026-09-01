@@ -11,7 +11,7 @@ export default function Index() {
 
   // No wallet → setup flow
   if (!hasWallet) {
-    return <Redirect href="/(wallet)/setup/wallet-setup" />;
+    return <Redirect href="/(wallet)/setup/wallet-created-successfully" />;
   }
 
   // Wallet exists but no password set → force password setup (legacy migration)

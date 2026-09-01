@@ -1,21 +1,13 @@
 import {
   JsonRpcProvider,
   Wallet,
-  HDNodeWallet,
   AddressLike,
   parseEther,
   formatEther,
   isAddress,
-  Mnemonic,
   Network as EthersNetwork,
 } from "ethers";
 import { CustomNetwork } from "../store/types";
-import { validateMnemonic } from "bip39";
-
-export interface ExtendedHDNodeWallet {
-  wallet: HDNodeWallet;
-  derivationPath: string;
-}
 
 const ALCHEMY_KEY =
   process.env.EXPO_PUBLIC_ALCHEMY_API_KEY ||
@@ -166,25 +158,6 @@ export class EVMService {
   async confirmTransaction(txHash: string) {
     const receipt = await this.provider.waitForTransaction(txHash);
     return receipt?.status === 1;
-  }
-
-  static createWallet() {
-    return HDNodeWallet.createRandom();
-  }
-
-  static restoreWalletFromMnemonic(mnemonicPhrase: string) {
-    if (!validateMnemonic(mnemonicPhrase)) throw new Error("Invalid mnemonic");
-    return HDNodeWallet.fromPhrase(mnemonicPhrase);
-  }
-
-  static deriveWalletByIndex(
-    mnemonicPhrase: string,
-    index = 0
-  ): ExtendedHDNodeWallet {
-    const mnemonic = Mnemonic.fromPhrase(mnemonicPhrase);
-    const path = `m/44'/60'/0'/0/${index}`;
-    const wallet = HDNodeWallet.fromMnemonic(mnemonic, path);
-    return { wallet, derivationPath: path };
   }
 
   destroy() {

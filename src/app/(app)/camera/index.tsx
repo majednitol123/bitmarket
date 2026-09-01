@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, Platform } from "react-native";
 import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,7 +9,6 @@ import {
   BarcodeScanningResult,
 } from "expo-camera";
 import Button from "../../../components/Button/Button";
-import { identifyAddress } from "../../../utils/identifyAddress";
 import { ThemeType } from "../../../styles/theme";
 import { LinearGradientBackground } from "../../../components/Styles/Gradient";
 import { MotiView } from "moti";
@@ -18,15 +17,10 @@ import QRCodeCamera from "../../../assets/svg/qr-code-camera.svg";
 import CloseIcon from "../../../assets/svg/close.svg";
 import LeftArrow from "../../../assets/svg/left-arrow.svg";
 
-// Styles are moved to StyleSheet at the bottom for performance and consistency
-
 export default function Camera() {
   const theme = useTheme() as ThemeType;
   const styles = createStyles(theme);
-  const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
-  const { chain } = params;
-  const chainName = chain as string;
   const [loading, setLoading] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
 
@@ -40,19 +34,10 @@ export default function Camera() {
 
   const onBarcodeScanned = (data: BarcodeScanningResult) => {
     setLoading(true);
-    if (!data) {
+    if (!data || !data.data) {
       return;
     }
-    if (data.data !== "") {
-      const routeName = !chainName ? identifyAddress(data.data) : chainName;
-      return router.push({
-        pathname: `token/send/${routeName}`,
-        params: {
-          ...params,
-          toAddress: data.data,
-        },
-      });
-    }
+    router.back();
   };
 
   const renderPermissionScreen = (title: string, subtitle: string, buttonTitle: string, isDenied = false) => (

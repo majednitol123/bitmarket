@@ -12,25 +12,6 @@ interface BlockchainIconProps {
 }
 
 // Map modern L2s to Trust Wallet asset IDs
-const TRUST_WALLET_ASSETS: Record<string, string> = {
-  'base': 'base',
-  'scroll': 'scroll',
-  'blast': 'blast',
-  'linea': 'linea',
-  'celo': 'celo',
-  'zksync': 'zksync',
-  'taiko': 'taiko',
-  'optimism': 'optimism',
-  'arbitrum': 'arbitrum',
-  'polygon': 'polygon',
-  'binance': 'binance',
-  'ethereum': 'ethereum',
-  'solana': 'solana',
-  'bitcoin': 'bitcoin',
-  'btc': 'bitcoin',
-  'eth': 'ethereum',
-  'sol': 'solana',
-};
 
 // Generates a nice deterministic gradient color based on the symbol string
 const getGradientColors = (text: string): [string, string] => {

@@ -399,7 +399,6 @@ function InnerApp() {
             }}
           >
             <Stack.Screen name="index" />
-            <Stack.Screen name="(wallet)/setup/wallet-setup" />
             <Stack.Screen name="(wallet)/setup/wallet-created-successfully" />
             <Stack.Screen name="(wallet)/unlock" />
             <Stack.Screen name="(wallet)/forgot-password" />
