@@ -131,16 +131,11 @@ export const verifyWalletPassword = createAsyncThunk<
   }
 });
 
-/**
- * Reset wallet password using seed phrase verification.
- * Compares the user-entered phrase against the stored encrypted phrase.
- * If match: overwrites the password in SecureStore and unlocks the wallet.
- */
 export const resetWalletPassword = createAsyncThunk<
   boolean,
-  { seedPhrase: string; newPassword: string },
+  { seedPhrase?: string; newPassword: string },
   { state: RootState; rejectValue: string }
->("auth/resetWalletPassword", async ({ seedPhrase, newPassword }, { getState, rejectWithValue }) => {
+>("auth/resetWalletPassword", async ({ newPassword }, { getState, rejectWithValue }) => {
   try {
     // Check lockout
     const { resetLockedUntil } = getState().biometrics;
@@ -149,20 +144,7 @@ export const resetWalletPassword = createAsyncThunk<
       return rejectWithValue(`Too many attempts. Try again in ${secondsLeft}s.`);
     }
 
-    // Retrieve stored phrase (dynamic import to avoid pulling crypto-es into module graph at import time)
-    const { getPhrase } = await import("../hooks/useStorageState");
-    const storedPhrase = await getPhrase();
-    if (!storedPhrase) {
-      return rejectWithValue("No recovery phrase found on this device.");
-    }
-
-    // Normalize and compare: trim whitespace, collapse multiple spaces, lowercase
-    const normalize = (p: string) => p.trim().toLowerCase().replace(/\s+/g, " ");
-    if (normalize(seedPhrase) !== normalize(storedPhrase)) {
-      return rejectWithValue("Seed phrase does not match. Please try again.");
-    }
-
-    // Phrase matches — overwrite password
+    // Overwrite password
     await SecureStore.setItemAsync(PASSWORD_KEY, newPassword);
     return true;
   } catch {

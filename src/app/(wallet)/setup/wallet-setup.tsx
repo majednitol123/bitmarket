@@ -1,14 +1,15 @@
-import { useState } from "react";
-import { SafeAreaView, Text, TouchableOpacity, View } from "react-native";
+import React, { useState } from "react";
+import { View, StyleSheet } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { router } from "expo-router";
 import styled, { useTheme } from "styled-components/native";
-import solanaService from "../../../services/SolanaService";
+import { MotiView } from "moti";
+import { useIsFocused } from "expo-router/react-navigation";
+
 import Button from "../../../components/Button/Button";
 import { ThemeType } from "../../../styles/theme";
-import { saveAddresses } from "../../../store/ethereumSlice"
-import { saveSolanaAddresses } from "../../../store/solanaSlice";
-import type { AddressState, SAddressState } from "../../../store/types";
+import { saveAddresses } from "../../../store/ethereumSlice";
+import type { AddressState } from "../../../store/types";
 import { GeneralStatus } from "../../../store/types";
 import { ROUTES } from "../../../constants/routes";
 import WalletIcon from "../../../assets/svg/wallet.svg";
@@ -17,16 +18,12 @@ import CoinsIcon from "../../../assets/svg/coins.svg";
 import { LinearGradientBackground } from "../../../components/Styles/Gradient";
 import { EVMService } from "../../../services/EthereumService";
 import { RootState } from "../../../store";
-import { useIsFocused } from "expo-router/react-navigation";
-import { MotiView } from "moti";
 
-
-const SafeAreaContainer = styled(SafeAreaView)<{ theme: ThemeType }>`
+const SafeAreaContainer = styled.SafeAreaView`
   flex: 1;
-  justify-content: flex-end;
 `;
 
-const ContentContainer = styled.View<{ theme: ThemeType }>`
+const ContentContainer = styled.View`
   flex: 1;
   justify-content: center;
   align-items: center;
@@ -35,21 +32,23 @@ const ContentContainer = styled.View<{ theme: ThemeType }>`
 
 const HeroSection = styled.View`
   align-items: center;
-  margin-bottom: 32px;
+  justify-content: center;
+  width: 100%;
 `;
 
 const IconGrid = styled.View`
   flex-direction: row;
-  justify-content: center;
   align-items: center;
-  margin-bottom: 24px;
+  justify-content: center;
+  margin-bottom: 32px;
 `;
 
 const IconCircle = styled.View<{ theme: ThemeType }>`
   width: 64px;
   height: 64px;
   border-radius: 20px;
-  background-color: rgba(240, 185, 11, 0.15);
+  background-color: ${(props) => props.theme.colors.cardBackground};
+  border: 1px solid ${(props) => props.theme.colors.border};
   justify-content: center;
   align-items: center;
   margin-horizontal: 8px;
@@ -65,17 +64,9 @@ const IconCircleSecondary = styled.View<{ theme: ThemeType }>`
   margin-horizontal: 8px;
 `;
 
-const Emoji = styled.Text`
-  font-size: 24px;
-`;
-
-const EmojiLarge = styled.Text`
-  font-size: 28px;
-`;
-
 const Title = styled.Text<{ theme: ThemeType }>`
   font-family: ${(props) => props.theme.fonts.families.openBold};
-  font-size: 32px;
+  font-size: 30px;
   color: ${(props) => props.theme.colors.white};
   text-align: center;
   margin-bottom: 12px;
@@ -86,6 +77,7 @@ const Subtitle = styled.Text<{ theme: ThemeType }>`
   font-size: ${(props) => props.theme.fonts.sizes.normal};
   color: ${(props) => props.theme.colors.lightGrey};
   text-align: center;
+  line-height: 22px;
 `;
 
 const ButtonContainer = styled.View<{ theme: ThemeType }>`
@@ -93,23 +85,6 @@ const ButtonContainer = styled.View<{ theme: ThemeType }>`
   padding-right: ${(props) => props.theme.spacing.large};
   padding-bottom: ${(props) => props.theme.spacing.large};
   padding-top: ${(props) => props.theme.spacing.small};
-`;
-
-const SecondaryButtonContainer = styled.TouchableOpacity<{ theme: ThemeType }>`
-  padding: 14px 20px;
-  border-radius: 14px;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  margin-top: 12px;
-  background-color: ${(props) => props.theme.colors.cardBackground};
-  border: 1px solid ${(props) => props.theme.colors.border};
-`;
-
-const SecondaryButtonText = styled.Text<{ theme: ThemeType }>`
-  font-family: ${(props) => props.theme.fonts.families.openBold};
-  font-size: ${(props) => props.theme.fonts.sizes.normal};
-  color: ${(props) => props.theme.colors.primary};
 `;
 
 export default function WalletSetup() {
@@ -121,15 +96,11 @@ export default function WalletSetup() {
   const chainId = useSelector(
     (state: RootState) => state.ethereum.activeChainId
   );
-  const walletSetup = async () => {
+
+  const handleCreateWallet = async () => {
     setLoading(true);
     try {
-      const ethWallet = await EVMService.createWallet();
-      const masterMnemonicPhrase = ethWallet.mnemonic.phrase;
-      const solWallet = await solanaService.restoreWalletFromPhrase(
-        masterMnemonicPhrase
-      );
-
+      const ethWallet = EVMService.createWallet();
       const activeChainId = chainId ?? 1;
 
       const ethereumAccount: AddressState = {
@@ -146,29 +117,7 @@ export default function WalletSetup() {
         failedNetworkRequestByChain: {
           [activeChainId]: false,
         },
-        transactionMetadataByChain: {
-          [activeChainId]: {
-            paginationKey: undefined,
-            transactions: [],
-          },
-        },
         activeBalance: 0,
-        transactionConfirmations: [],
-      };
-
-      const solanaAccount: SAddressState = {
-        accountName: "Account 1",
-        derivationPath: `m/44'/501'/0'/0'`,
-        address: solWallet.publicKey.toBase58(),
-        publicKey: solWallet.publicKey.toBase58(),
-        balance: 0,
-        transactionMetadata: {
-          paginationKey: undefined,
-          transactions: [],
-        },
-        failedNetworkRequest: false,
-        status: GeneralStatus.Idle,
-        transactionConfirmations: [],
       };
 
       dispatch(
@@ -177,18 +126,14 @@ export default function WalletSetup() {
         })
       );
 
-      dispatch(saveSolanaAddresses([solanaAccount]));
-
-      router.push({
-        pathname: ROUTES.seedPhrase,
-        params: { phrase: masterMnemonicPhrase },
-      });
+      router.push(ROUTES.walletCreatedSuccessfully);
     } catch (err) {
       console.error("Failed to create wallet", err);
     } finally {
       setLoading(false);
     }
   };
+
   return (
     <LinearGradientBackground colors={theme.colors.primaryLinearGradient}>
       <SafeAreaContainer>
@@ -213,14 +158,17 @@ export default function WalletSetup() {
                 <View style={{ position: "relative", justifyContent: "center", alignItems: "center" }}>
                   <MotiView
                     from={{ opacity: 0, scale: 0.8 }}
-                    animate={isFocused ? { opacity: [0.15, 0.3, 0.15], scale: [1, 1.4, 1] } : { opacity: 0.15, scale: 1 }}
+                    animate={
+                      isFocused
+                        ? { opacity: [0.15, 0.3, 0.15], scale: [1, 1.4, 1] }
+                        : { opacity: 0.15, scale: 1 }
+                    }
                     transition={{
                       type: "timing",
                       duration: 2000,
                       loop: isFocused,
                       repeatReverse: true,
                     }}
-
                     style={[
                       StyleSheet.absoluteFill,
                       {
@@ -231,13 +179,13 @@ export default function WalletSetup() {
                     ]}
                   />
                   <IconCircle>
-                    <WalletIcon 
-                      color={theme.colors.primary} 
-                      width={32} 
-                      height={32} 
-                      fill="transparent" 
-                      stroke={theme.colors.primary} 
-                      strokeWidth={2} 
+                    <WalletIcon
+                      color={theme.colors.primary}
+                      width={32}
+                      height={32}
+                      fill="transparent"
+                      stroke={theme.colors.primary}
+                      strokeWidth={2}
                     />
                   </IconCircle>
                 </View>
@@ -279,25 +227,15 @@ export default function WalletSetup() {
               color={theme.colors.realWhite}
               loading={loading}
               disabled={loading}
-              onPress={walletSetup}
+              onPress={handleCreateWallet}
               title="Create Wallet"
               icon={
                 <WalletIcon width={25} height={25} fill={theme.colors.realWhite} />
               }
             />
-            <SecondaryButtonContainer
-              onPress={() => router.push(ROUTES.walletImportOptions)}
-            >
-              <SecondaryButtonText>
-                Already have a wallet? Restore it
-              </SecondaryButtonText>
-            </SecondaryButtonContainer>
           </ButtonContainer>
         </MotiView>
       </SafeAreaContainer>
     </LinearGradientBackground>
   );
 }
-
-const styles = StyleSheet.create({}); // For absoluteFill usage if needed, though styled covers most
-import { StyleSheet } from "react-native";

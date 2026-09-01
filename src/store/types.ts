@@ -5,55 +5,14 @@ export enum GeneralStatus {
   Failed = "FAILED",
   Success = "success",
 }
- export interface Network {
-    name: string;
-    chainId: number;
-    rpcUrl: string;
-    nftRpcUrl?: string;
-}
-export enum ConfirmationState {
-  Pending = "Pending",
-  Confirmed = "Confirmed",
-  Failed = "Failed",
-}
 
-/* -------------------- Transactions -------------------- */
-export interface Transaction {
-  uniqueId: string;
-  from: string;
-  to: string;
-  hash: string;
-  value: number;
-  blockTime: number;
-  asset: string;
-  direction: string;
-  chainId?: number;
-  solanaNetwork?: "mainnet" | "devnet";
-}
-
-export interface TransactionConfirmation {
-  txHash: string;
-  status: ConfirmationState;
-  error?: string;
+export interface Network {
+  name: string;
+  chainId: number;
+  rpcUrl: string;
 }
 
 /* -------------------- Wallet Address -------------------- */
-export interface SAddressState {
-  accountName: string;
-  derivationPath: string;
-  address: string;
-  publicKey: string;
-  balance: number;
-  status: GeneralStatus;
-  failedNetworkRequest: boolean;
-  transactionMetadata: {
-    paginationKey?: string[];
-    transactions: Transaction[];
-  };
-  transactionConfirmations: TransactionConfirmation[];
-  balanceByNetwork?: Record<"mainnet" | "devnet", number>;
-  transactionsByNetwork?: Record<"mainnet" | "devnet", Transaction[]>;
-}
 export interface AddressState {
   accountName: string;
   derivationPath: string;
@@ -69,25 +28,10 @@ export interface AddressState {
   // 🔹 PER-CHAIN network error flags
   failedNetworkRequestByChain: Record<number, boolean>;
 
-  // 🔹 PER-CHAIN transactions
-  transactionMetadataByChain: Record<
-    number,
-    {
-      paginationKey?: string[];
-      transactions: Transaction[];
-    }
-  >;
-
   // 🔹 Convenience field for UI (balance of active chain)
   activeBalance?: number;
+}
 
-  // 🔹 Transaction confirmations (global)
-  transactionConfirmations: TransactionConfirmation[];
-}
-export interface TransactionMetadata {
-  paginationKey: undefined | string | string[];
-  transactions: Transaction[];
-}
 /* -------------------- Custom Network -------------------- */
 export interface CustomNetwork {
   chainId: number;
@@ -97,31 +41,18 @@ export interface CustomNetwork {
   socketUrl?: string;
   symbol: string;
   explorerUrl?: string;
-  nftRpcUrl?: string;
 }
 
 /* -------------------- EVM Wallet -------------------- */
 export interface EvmWalletState {
   activeChainId: number | null;
 
-  // chainId -> active index
+  // active index
   activeIndex: number;
 
   // chainId -> network
   networks: Record<number, CustomNetwork>;
 
-  // chainId -> addresses
-  // addresses: Record<number, AddressState[]>;
+  // addresses
   globalAddresses: AddressState[];
-}
-
-/* -------------------- Solana Wallet -------------------- */
-export interface SolanaWalletState {
-  activeIndex: number;
-  addresses: SAddressState[];
-  selectedNetwork?: "mainnet" | "devnet";
-  customRpcUrls?: {
-    mainnet?: string;
-    devnet?: string;
-  };
 }

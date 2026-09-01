@@ -19,11 +19,9 @@
 // import { clearStorage } from "../hooks/useStorageState";
 // import Theme from "../styles/theme";
 // import { store, persistor, clearPersistedState } from "../store";
-// import { resetSolanaState } from "../store/solanaSlice";
 // import {  resetState } from "../store/ethereumSlice";
 // import { ROUTES } from "../constants/routes";
 // import LeftIcon from "../assets/svg/left-arrow.svg";
-// import { EvmWallet } from "../components/EvmWallet";
 // import { Alert, View } from "react-native";
 // import { useCallback, useEffect, useState } from "react";
 // // import TokenScreen from "./(app)/token/token";
@@ -95,7 +93,6 @@
 //       } else {
 //         // Clear states safely
 //         try {
-//           resetSolanaState();
 //           resetState();
 //           clearStorage();
 //           clearPersistedState();
@@ -137,8 +134,6 @@
 //         <ThemeProvider theme={Theme}>
 //           <GestureHandlerRootView style={{ flex: 1 }}>
 //             <StatusBar style="light" />
-//             {/* <EvmWallet/> */}
-            
 //            <Stack
 //               screenOptions={{
 //                 headerShown: false,
@@ -405,11 +400,7 @@ function InnerApp() {
           >
             <Stack.Screen name="index" />
             <Stack.Screen name="(wallet)/setup/wallet-setup" />
-            <Stack.Screen name="(wallet)/seed/seed-phrase" />
-            <Stack.Screen name="(wallet)/seed/confirm-seed-phrase" />
             <Stack.Screen name="(wallet)/setup/wallet-created-successfully" />
-            <Stack.Screen name="(wallet)/setup/wallet-import-options" />
-            <Stack.Screen name="(wallet)/seed/wallet-import-seed-phrase" />
             <Stack.Screen name="(wallet)/unlock" />
             <Stack.Screen name="(wallet)/forgot-password" />
             <Stack.Screen name="(app)" options={{ headerShown: false, gestureEnabled: false }} />

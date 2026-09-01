@@ -9,9 +9,6 @@ import Toast from "react-native-toast-message";
 import { LinearGradient } from "expo-linear-gradient";
 import type { RootState } from "../../store";
 import FloatingBackButton from "../FloatingBackButton";
-
-
-import { getPhrase, clearStorage } from "../../hooks/useStorageState";
 import { clearPersistedState, store } from "../../store";
 import { toastConfig } from "../../config/toast";
 import Header from "../../components/Header/Header";
@@ -35,13 +32,6 @@ export default function AppLayout() {
   const theme = useTheme();
 
 
-  const solActiveIndex = useSelector(
-    (state: RootState) => state.solana.activeIndex ?? 0
-  );
-  const activeChainId = useSelector(
-    (state: RootState) => state.ethereum.activeChainId
-  );
-
   const activeIndex = useSelector(
     (state: RootState) =>
       state.ethereum.activeIndex ?? 0
@@ -52,23 +42,16 @@ export default function AppLayout() {
   );
 
   const ethAddress = ethAccounts[activeIndex]?.address ?? "";
-
-  const solWallet = useSelector(
-    (state: RootState) => state.solana.addresses[solActiveIndex]?.address ?? ""
-  );
   const [appReady, setAppReady] = useState<boolean>(false);
   const [userExists, setUserExists] = useState<boolean>(false);
-  const walletsExist = ethAddress !== "" && solWallet !== "";
+  const walletsExist = ethAddress !== "";
 
 useEffect(() => {
   const prepare = async () => {
     try {
-      const phrase = await getPhrase();
-
       // No wallets? clean up
-      if (!phrase || !walletsExist) {
+      if (!walletsExist) {
         clearPersistedState();
-        clearStorage();
         setUserExists(false);
         return;
       }
@@ -83,14 +66,12 @@ useEffect(() => {
       }
 
     } catch (err) {
-      console.error("Error fetching phrase:", err);
+      console.error("Error in app prepare:", err);
       Alert.alert("Error", `Something went wrong: ${err instanceof Error ? err.message : err}`);
     } finally {
       setAppReady(true);
       await SplashScreen.hideAsync();
-
     }
-
   };
 
   SystemUI.setBackgroundColorAsync(theme.colors.background);
@@ -154,45 +135,6 @@ const onLayoutRootView = useCallback(async () => {
             }}
           />
           <Stack.Screen
-            name="token/[id]"
-            options={{
-              gestureEnabled: true,
-            }}
-          />
-
-
-
-          <Stack.Screen
-            name="token/send/send-options"
-            options={{
-              gestureEnabled: true,
-            }}
-          />
-          <Stack.Screen
-            name="token/send/[send]"
-            options={{
-              gestureEnabled: true,
-            }}
-          />
-          <Stack.Screen
-            name="token/receive/[receive]"
-            options={{
-              gestureEnabled: true,
-            }}
-          />
-          <Stack.Screen
-            name="token/send/send-confirmation"
-            options={{
-              gestureEnabled: true,
-            }}
-          />
-          <Stack.Screen
-            name="token/receive/receive-options"
-            options={{
-              gestureEnabled: true,
-            }}
-          />
-          <Stack.Screen
             name="camera/index"
             options={{
               gestureEnabled: true,
@@ -200,24 +142,6 @@ const onLayoutRootView = useCallback(async () => {
           />
           <Stack.Screen
             name="settings/settings-modal"
-            options={{
-              gestureEnabled: true,
-            }}
-          />
-          <Stack.Screen
-            name="accounts/accounts"
-            options={{
-              gestureEnabled: true,
-            }}
-          />
-          <Stack.Screen
-            name="accounts/account-modal"
-            options={{
-              gestureEnabled: true,
-            }}
-          />
-          <Stack.Screen
-            name="settings/dapp-browser"
             options={{
               gestureEnabled: true,
             }}

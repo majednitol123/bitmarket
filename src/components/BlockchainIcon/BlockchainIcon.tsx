@@ -98,7 +98,7 @@ export const BlockchainIcon: React.FC<BlockchainIconProps> = ({
   else if (name.includes('zksync') || id === 324 || id === 300) trustWalletKey = 'zksync';
   else if (name.includes('optimism') || name.includes('op mainnet') || lowerSymbol === 'op' || id === 10 || id === 11155420) trustWalletKey = 'optimism';
   else if (name.includes('arbitrum') || lowerSymbol === 'arb' || id === 42161 || id === 421614) trustWalletKey = 'arbitrum';
-  else if (name.includes('polygon') || name.includes('zkevm') || lowerSymbol === 'matic' || lowerSymbol === 'pol' || id === 137 || id === 80002 || id === 1101 || id === 2442) trustWalletKey = 'polygon';
+  else if (name.includes('polygon') || name.includes('zkevm') || lowerSymbol === 'matic' || lowerSymbol === 'pol' || id === 137 || id === 80002 || id === 1101) trustWalletKey = 'polygon';
   else if (name.includes('binance') || name.includes('bsc') || lowerSymbol === 'bnb' || id === 56 || id === 97) trustWalletKey = 'binance';
   else if (name.includes('ethereum') || lowerSymbol === 'eth' || id === 1 || id === 11155111) trustWalletKey = 'ethereum';
   else if (lowerSymbol === 'sol' || lowerSymbol === 'solana') trustWalletKey = 'solana';

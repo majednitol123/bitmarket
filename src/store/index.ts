@@ -17,22 +17,14 @@ import { formatEther } from "ethers";
 
 import ethereumReducer, {
   updateBalance,
-  fetchEvmTransactions,
 } from "./ethereumSlice";
-import solanaReducer from "./solanaSlice";
-import priceReducer from "./priceSlice";
 import biometricsReducer from "./biometricsSlice";
-import importedAccountReducer from "./importedAccountSlice";
 import { evmServices, registerEvmService } from "../services/EthereumService";
-import solanaService from "../services/SolanaService";
 
-import erc20Reducer from "./tokenSlice";
-// import nftReducer from "./nftSlice";
-import solTokenReducer from "./solTokenSlice";
 import settingsReducer from "./settingsSlice";
+import connectedUserReducer from "./connectedUserSlice";
 
 import { GeneralStatus } from "./types";
-import { rpcCircuitBreaker } from "../utils/circuitBreaker";
 
 /* ---------------- Persist ---------------- */
 
@@ -45,7 +37,6 @@ const walletTransform = createTransform(
           ...addr,
           balanceByChain: {},
           statusByChain: {},
-          transactionMetadataByChain: {},
           failedNetworkRequestByChain: {},
         })),
       };
@@ -63,64 +54,17 @@ const walletPersistConfig = {
   transforms: [walletTransform],
 };
 
-const solanaTransform = createTransform(
-  (inboundState: any) => {
-    if (inboundState.addresses) {
-      return {
-        ...inboundState,
-        addresses: inboundState.addresses.map((addr: any) => ({
-          ...addr,
-          balance: 0,
-          status: GeneralStatus.Idle,
-          failedNetworkRequest: false,
-          transactionConfirmations: [],
-          transactionMetadata: { paginationKey: undefined, transactions: [] },
-          balanceByNetwork: { mainnet: 0, devnet: 0 },
-          transactionsByNetwork: { mainnet: [], devnet: [] },
-        })),
-      };
-    }
-    return inboundState;
-  },
-  (outboundState) => outboundState,
-  { whitelist: ["solana"] }
-);
-
-const solanaPersistConfig = {
-  key: "solana",
-  storage: AsyncStorage,
-  whitelist: ["addresses", "activeIndex", "selectedNetwork", "customRpcUrls"],
-  transforms: [solanaTransform],
-};
-
-const erc20Transform = createTransform(
-  (inboundState: any) => ({ ...inboundState, balances: {}, transfers: {}, allNfts: [] }),
-  (outboundState) => outboundState,
-  { whitelist: ["erc20"] }
-);
-
-const erc20PersistConfig = {
-  key: "erc20",
-  storage: AsyncStorage,
-  whitelist: ["trackedTokens"],
-  transforms: [erc20Transform],
-};
-
 const persistConfig = {
   key: "root",
   storage: AsyncStorage,
-  whitelist: ["biometrics", "settings", "importedAccounts"],
+  whitelist: ["biometrics", "settings"],
 };
 
 const rootReducer = combineReducers({
   ethereum: persistReducer(walletPersistConfig, ethereumReducer),
-  solana: persistReducer(solanaPersistConfig, solanaReducer),
-  price: priceReducer,
   biometrics: biometricsReducer,
-  erc20: persistReducer(erc20PersistConfig, erc20Reducer),
-  solToken: solTokenReducer,
-  importedAccounts: importedAccountReducer,
   settings: settingsReducer,
+  connectedUser: connectedUserReducer,
 });
 
 const resettableRootReducer = (state: any, action: any) => {
@@ -136,14 +80,8 @@ const persistedReducer = persistReducer(persistConfig, resettableRootReducer);
 
 /* ---------------- WebSocket Middleware ---------------- */
 
-// BUG #2 FIX: Use a Map<chainId, provider> instead of WeakSet.
-// The WeakSet never cleared entries because providers are never GC'd.
-// Now we track which chainId has a listener and on which provider,
-// so we can skip duplicates and clean up when providers change.
 const activeBlockListeners = new Map<number, any>();
 
-// Throttle: only dispatch balance updates at most once per 30s per chain
-// to prevent the JS thread from being saturated when 34 chains fire block events.
 const lastBlockDispatch = new Map<number, number>();
 const BLOCK_THROTTLE_MS = 30_000;
 
@@ -190,12 +128,6 @@ export const evmWebSocketMiddleware: Middleware =
         return;
       }
 
-      // Circuit-breaker: skip if the circuit is open for this chain
-      const chainKey = `evm-${chainId}`;
-      if (rpcCircuitBreaker.isOpen(chainKey)) {
-        return;
-      }
-
       // Throttle: skip if we dispatched for this chain less than 30s ago
       const lastTime = lastBlockDispatch.get(chainId) ?? 0;
       if (Date.now() - lastTime < BLOCK_THROTTLE_MS) return;
@@ -204,12 +136,10 @@ export const evmWebSocketMiddleware: Middleware =
         let balance: bigint;
         try {
           balance = await service.getBalance(address);
-          rpcCircuitBreaker.recordSuccess(chainKey);
         } catch (initialError: any) {
           if (initialError.message?.includes("block with number") || initialError.code === -32000) {
             await new Promise(resolve => setTimeout(resolve, 1000));
             balance = await service.getBalance(address);
-            rpcCircuitBreaker.recordSuccess(chainKey);
           } else {
             throw initialError;
           }
@@ -230,11 +160,7 @@ export const evmWebSocketMiddleware: Middleware =
             balance: newBalance,
           })
         );
-
-        // Fetch transactions for this chain to show the new transaction instantly
-        store.dispatch(fetchEvmTransactions({ chainId, address }) as any);
       } catch (e: any) {
-        rpcCircuitBreaker.recordFailure(chainKey);
         if (!e.message?.includes("block with number")) {
           console.warn("EVM WS balance sync warning:", e.message || e);
         }
@@ -243,7 +169,6 @@ export const evmWebSocketMiddleware: Middleware =
 
     return result;
   };
-
 
 /* ---------------- Listener Middleware ---------------- */
 
@@ -288,37 +213,6 @@ store.subscribe(() => {
   }
 });
 
-// Sync Solana custom RPC in real-time when state changes
-const initialState = store.getState() as any;
-const initialNetwork = initialState.solana?.selectedNetwork ?? "devnet";
-const initialCustomUrl = initialState.solana?.customRpcUrls?.[initialNetwork];
-let lastSolanaFingerprint = `${initialNetwork}:${initialCustomUrl || ""}`;
-
-store.subscribe(() => {
-  try {
-    const state = store.getState() as any;
-    const selectedNetwork = state.solana?.selectedNetwork ?? "devnet";
-    const customUrl = state.solana?.customRpcUrls?.[selectedNetwork];
-    const fp = `${selectedNetwork}:${customUrl || ""}`;
-    if (fp === lastSolanaFingerprint) return;
-    lastSolanaFingerprint = fp;
-
-    if (customUrl) {
-      solanaService.selectNetwork(selectedNetwork, customUrl);
-    } else {
-      solanaService.selectNetwork(selectedNetwork);
-    }
-  } catch (err) {
-    console.warn("[Store] Error syncing Solana RPC:", err);
-  }
-});
-
-AppState.addEventListener("change", (nextState) => {
-  if (nextState === "background") {
-    AsyncStorage.setItem("priceCache", JSON.stringify(store.getState().price.data));
-  }
-});
-
 /* ---------------- Helpers ---------------- */
 
 export const clearPersistedState = async () => {
@@ -326,7 +220,7 @@ export const clearPersistedState = async () => {
     await persistor.purge();
     store.dispatch({ type: "RESET_APP_STATE" });
     Object.values(evmServices).forEach((s) =>
-      s.provider?.removeAllListeners()
+      s?.provider?.removeAllListeners()
     );
   } catch (err) {
     console.error("Persist purge failed:", err);

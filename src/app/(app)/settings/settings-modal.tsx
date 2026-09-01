@@ -1,23 +1,17 @@
-import { router } from "expo-router";
 import styled, { useTheme } from "styled-components/native";
-import { AppDispatch, clearPersistedState, RootState, store } from "../../../store";
-import { clearStorage } from "../../../hooks/useStorageState";
-import { deleteImportedEvmKey, deleteImportedSolKey } from "../../../utils/importedKeyStorage";
-import { ROUTES } from "../../../constants/routes";
+import { AppDispatch, RootState } from "../../../store";
 import { ThemeType } from "../../../styles/theme";
 import { SafeAreaContainer } from "../../../components/Styles/Layout.styles";
-import { EvmWallet } from "../../../components/EvmWallet";
-import { SolanaWallet } from "../../../components/SolanaWallet";
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { authenticateBiometric, saveBiometricPreference, checkBiometricAvailability } from "../../../store/biometricsSlice";
 import { Switch, Alert, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradientBackground } from "../../../components/Styles/Gradient";
-import Svg, { Path, Circle, Rect, Line } from "react-native-svg";
+import Svg, { Path, Circle } from "react-native-svg";
 import { setThemeMode, ThemeMode } from "../../../store/settingsSlice";
 import * as LocalAuthentication from "expo-local-authentication";
-
+import FingerprintIcon from "../../../assets/svg/edit.svg";
 
 const ScrollContainer = styled.ScrollView`
   flex: 1;
@@ -25,13 +19,6 @@ const ScrollContainer = styled.ScrollView`
 
 const ContentContainer = styled.View<{ theme: ThemeType }>`
   padding: ${(props) => props.theme.spacing.medium};
-`;
-
-const HeaderTitle = styled.Text<{ theme: ThemeType }>`
-  font-family: ${(props) => props.theme.fonts.families.openBold};
-  font-size: ${(props) => props.theme.fonts.sizes.title};
-  color: ${(props) => props.theme.colors.white};
-  margin-bottom: 24px;
 `;
 
 const SettingsGroup = styled.View<{ theme: ThemeType }>`
@@ -48,37 +35,20 @@ const GroupTitle = styled.Text<{ theme: ThemeType }>`
   margin-left: 4px;
 `;
 
-const OptionCard = styled.TouchableOpacity<{ theme: ThemeType; danger?: boolean }>`
-  flex-direction: row;
-  align-items: center;
-  background-color: ${(props) => props.theme.colors.cardBackground};
-  padding: 16px;
-  border-radius: 14px;
-  margin-bottom: 8px;
-  border: 1px solid ${(props) => props.theme.colors.border};
-`;
-
-const OptionLeft = styled.View`
-  flex-direction: row;
-  align-items: center;
-  flex: 1;
-`;
-
-const IconCircle = styled.View<{ theme: ThemeType; danger?: boolean }>`
+const IconCircle = styled.View<{ theme: ThemeType }>`
   justify-content: center;
   align-items: center;
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background-color: ${({ theme, danger }) =>
-    danger ? "rgba(255, 82, 82, 0.1)" : "rgba(240, 185, 11, 0.1)"};
+  background-color: rgba(240, 185, 11, 0.1);
   margin-right: 14px;
 `;
 
-const OptionText = styled.Text<{ theme: ThemeType; danger?: boolean }>`
+const OptionText = styled.Text<{ theme: ThemeType }>`
   font-family: ${(p) => p.theme.fonts.families.openBold};
   font-size: ${(p) => p.theme.fonts.sizes.normal};
-  color: ${({ theme, danger }) => (danger ? theme.colors.error : theme.colors.white)};
+  color: ${(p) => p.theme.colors.white};
   padding-right: 4px;
 `;
 
@@ -112,13 +82,18 @@ const OptionRow = styled.View`
   width: 100%;
 `;
 
+const OptionLeft = styled.View`
+  flex-direction: row;
+  align-items: center;
+  flex: 1;
+`;
+
 const CardDivider = styled.View<{ theme: ThemeType }>`
   height: 1px;
   background-color: ${(props) => props.theme.colors.border};
   margin-top: 12px;
   margin-bottom: 12px;
 `;
-
 
 const ThemeSelectorContainer = styled.View<{ theme: ThemeType }>`
   flex-direction: row;
@@ -133,7 +108,7 @@ const ThemeOptionButton = styled.TouchableOpacity<{ theme: ThemeType; active: bo
   flex: 1;
   flex-direction: row;
   align-items: center;
-  justifyContent: center;
+  justify-content: center;
   padding: 12px 8px;
   border-radius: 10px;
   background-color: ${({ theme, active }) =>
@@ -172,7 +147,7 @@ const SettingsIndex = () => {
   const theme = useTheme();
   const dispatch = useDispatch<AppDispatch>();
   const insets = useSafeAreaInsets();
-  const { biometricPreference, biometricAvailable } = useSelector(
+  const { biometricPreference } = useSelector(
     (state: RootState) => state.biometrics
   );
 
@@ -223,7 +198,6 @@ const SettingsIndex = () => {
         await dispatch(saveBiometricPreference(true));
         setBioEnabled(true);
       } catch (err: any) {
-        // Auth cancelled or failed — revert toggle and show descriptive message if not cancelled
         setBioEnabled(false);
         if (err !== "Authentication cancelled.") {
           Alert.alert(
@@ -238,46 +212,11 @@ const SettingsIndex = () => {
     }
   };
 
-  const clearWallets = () => {
-    Alert.alert(
-      "Clear All Wallets",
-      "This will remove all wallets and network settings. This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const state = store.getState();
-              const importedAccs = state.importedAccounts?.accounts || [];
-              for (const acc of importedAccs) {
-                if (acc.evmAddress) {
-                  await deleteImportedEvmKey(acc.evmAddress);
-                }
-                if (acc.solAddress) {
-                  await deleteImportedSolKey(acc.solAddress);
-                }
-              }
-            } catch (err) {
-              console.error("Failed to delete imported private keys:", err);
-            }
-
-            await clearPersistedState();
-            await clearStorage();
-            router.replace(ROUTES.walletSetup);
-          },
-        },
-      ]
-    );
-  };
-
   return (
     <LinearGradientBackground colors={theme.colors.primaryLinearGradient}>
       <SafeAreaContainer edges={["bottom", "left", "right"]}>
         <ScrollContainer showsVerticalScrollIndicator={false}>
           <ContentContainer style={{ paddingTop: insets.top + 60 }}>
-
             <SettingsGroup>
               <GroupTitle>Security</GroupTitle>
               <BiometricOptionCard
@@ -342,74 +281,11 @@ const SettingsIndex = () => {
                 </ThemeOptionButton>
               </ThemeSelectorContainer>
             </SettingsGroup>
-
-            <SettingsGroup>
-              <GroupTitle>Accounts</GroupTitle>
-              <OptionCard
-                activeOpacity={0.7}
-                onPress={() => router.push("/(app)/settings/import-private-key")}
-              >
-                <OptionLeft>
-                  <IconCircle>
-                    <ImportIcon width={20} height={20} fill={theme.colors.primary} />
-                  </IconCircle>
-                  <View>
-                    <OptionText>Import Private Key</OptionText>
-                    <OptionSubtext>Import an existing account</OptionSubtext>
-                  </View>
-                </OptionLeft>
-              </OptionCard>
-            </SettingsGroup>
-
-            <SettingsGroup>
-              <GroupTitle>Browser</GroupTitle>
-              <OptionCard
-                activeOpacity={0.7}
-                onPress={() => router.push(ROUTES.browser)}
-              >
-                <OptionLeft>
-                  <IconCircle>
-                    <BrowserIcon width={20} height={20} fill={theme.colors.primary} />
-                  </IconCircle>
-                  <View>
-                    <OptionText>dApp Browser</OptionText>
-                    <OptionSubtext>Open CoinMask DeFi platform</OptionSubtext>
-                  </View>
-                </OptionLeft>
-              </OptionCard>
-            </SettingsGroup>
-
-            <SettingsGroup>
-              <GroupTitle>Networks</GroupTitle>
-              <EvmWallet />
-              <SolanaWallet />
-            </SettingsGroup>
-
-            <SettingsGroup>
-              <GroupTitle>Data</GroupTitle>
-              <OptionCard danger activeOpacity={0.7} onPress={clearWallets}>
-                <OptionLeft>
-                  <IconCircle danger>
-                    <TrashIcon width={20} height={20} fill={theme.colors.error} />
-                  </IconCircle>
-                  <View>
-                    <OptionText danger>Clear Wallets</OptionText>
-                    <OptionSubtext>Remove all wallets and reset app</OptionSubtext>
-                  </View>
-                </OptionLeft>
-              </OptionCard>
-            </SettingsGroup>
           </ContentContainer>
         </ScrollContainer>
       </SafeAreaContainer>
     </LinearGradientBackground>
   );
 };
-
-
-import FingerprintIcon from "../../../assets/svg/edit.svg";
-import TrashIcon from "../../../assets/svg/clear.svg";
-import ImportIcon from "../../../assets/svg/import-wallet.svg";
-import BrowserIcon from "../../../assets/svg/globe-browser.svg";
 
 export default SettingsIndex;

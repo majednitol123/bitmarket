@@ -10,8 +10,6 @@ const DISABLED_ROUTES = [
   "wallet-setup",
   "wallet-created-successfully",
   "unlock",
-  "[id]",
-  "dapp-browser",
   "camera",
   "(app)",
 ];
@@ -20,12 +18,6 @@ const getHeaderTitle = (lastSegment: string): string => {
   switch (lastSegment) {
     case "settings-modal":
       return "Settings";
-    case "accounts":
-      return "Manage Wallets";
-    case "import-private-key":
-      return "Import Account";
-    case "account-modal":
-      return "Account Information";
     default:
       return "";
   }
@@ -42,11 +34,6 @@ export default function FloatingBackButton(props?: any) {
   // 1. If we are in the outer stack and the active route is inside the (app) folder, return null
   // to prevent double headers on all screens within (app)
   if (routeName && (routeName === "(app)" || routeName.startsWith("(app)/"))) {
-    return null;
-  }
-
-  // 2. Dynamic token details route check using segments (screen renders its own back button)
-  if (segments && segments[1] === "token" && segments.length === 3) {
     return null;
   }
 
