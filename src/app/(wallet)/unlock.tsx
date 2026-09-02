@@ -12,6 +12,7 @@ import {
   verifyWalletPassword,
   clearAuthError,
 } from "../../store/biometricsSlice";
+import { LinearGradient } from "expo-linear-gradient";
 import { LinearGradientBackground } from "../(app)/_layout";
 import Button from "../../components/Button/Button";
 import { ROUTES } from "../../constants/routes";
@@ -74,7 +75,7 @@ export default function UnlockScreen() {
 
   const handlePasswordUnlock = useCallback(() => {
     if (!password.trim()) {
-      Alert.alert("Error", "Please enter your password");
+      Alert.alert("Error", "Please enter your passcode");
       return;
     }
     dispatch(clearAuthError());
@@ -116,11 +117,11 @@ export default function UnlockScreen() {
               <View style={styles.iconCircle}>
                 <LockIcon color={theme.colors.primary} width={32} height={32} />
               </View>
-              <Text style={styles.title}>Unlock Wallet</Text>
+              <Text style={styles.title}>Unlock BitMarket</Text>
               <Text style={styles.subtitle}>
                 {showBiometricUI && !showPasswordInput
-                  ? "Use biometrics to access your wallet quickly. "
-                  : "Enter your password to access your wallet. "}
+                  ? "Use biometrics to access BitMarket quickly. "
+                  : "Enter your passcode to access BitMarket. "}
               </Text>
             </MotiView>
 
@@ -157,14 +158,14 @@ export default function UnlockScreen() {
                 <View>
                   <MotiView
                     animate={{
-                      borderColor: isFocused ? theme.colors.primary : theme.colors.border,
-                      backgroundColor: isFocused ? "rgba(55, 114, 255, 0.08)" : theme.colors.dark,
+                      borderColor: isFocused ? "rgba(139, 92, 246, 0.85)" : "rgba(139, 92, 246, 0.25)",
+                      backgroundColor: theme.colors.dark,
                     }}
                     transition={{ type: "timing", duration: 200 }}
                     style={styles.inputWrapper}
                   >
                     <KeyIcon 
-                      color={isFocused ? theme.colors.primary : theme.colors.lightGrey} 
+                      color={isFocused ? theme.colors.primaryLight : theme.colors.lightGrey} 
                       width={20} 
                       height={20} 
                       style={{ marginRight: 12 }} 
@@ -172,7 +173,7 @@ export default function UnlockScreen() {
                     <TextInput
                       style={styles.input}
                       secureTextEntry
-                      placeholder="Enter password"
+                      placeholder="Enter passcode"
                       placeholderTextColor={theme.colors.lightGrey}
                       value={password}
                       onChangeText={setPassword}
@@ -184,15 +185,25 @@ export default function UnlockScreen() {
                     />
                   </MotiView>
 
-                  <View style={styles.buttonWrapper}>
-                    <Button
-                      title="Unlock"
-                      backgroundColor={theme.colors.primary}
-                      color={theme.colors.realWhite}
-                      onPress={handlePasswordUnlock}
-                      loading={status === "loading"}
-                    />
-                  </View>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={handlePasswordUnlock}
+                    disabled={status === "loading"}
+                    style={styles.connectButtonWrapper}
+                  >
+                    <LinearGradient
+                      colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.connectGradient}
+                    >
+                      {status === "loading" ? (
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      ) : (
+                        <Text style={styles.connectButtonText}>Unlock</Text>
+                      )}
+                    </LinearGradient>
+                  </TouchableOpacity>
                 </View>
               )}
 
@@ -244,8 +255,8 @@ function createStyles(theme: ThemeType) {
     card: {
       backgroundColor: theme.colors.cardBackground,
       borderRadius: 24,
-      padding: 32,
-      paddingHorizontal: 24,
+      padding: 28,
+      paddingHorizontal: 22,
       borderWidth: 1,
       borderColor: theme.colors.border,
       width: "100%",
@@ -254,7 +265,9 @@ function createStyles(theme: ThemeType) {
       width: 64,
       height: 64,
       borderRadius: 32,
-      backgroundColor: "rgba(55, 114, 255, 0.15)",
+      backgroundColor: "rgba(139, 92, 246, 0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(139, 92, 246, 0.25)",
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 20,
@@ -289,11 +302,10 @@ function createStyles(theme: ThemeType) {
     },
     inputWrapper: {
       backgroundColor: theme.colors.dark,
-      borderRadius: 14,
-      borderWidth: 2,
-      borderColor: theme.colors.border,
+      borderRadius: 16,
+      borderWidth: 1.5,
       paddingHorizontal: 16,
-      marginBottom: 20,
+      marginBottom: 8,
       flexDirection: "row",
       alignItems: "center",
       height: 54,
@@ -331,8 +343,22 @@ function createStyles(theme: ThemeType) {
       fontSize: parseFloat(theme.fonts.sizes.small as string),
       flex: 1,
     },
-    buttonWrapper: {
-      marginTop: 8,
+    connectButtonWrapper: {
+      marginTop: 12,
+      borderRadius: 14,
+      overflow: "hidden",
+    },
+    connectGradient: {
+      paddingVertical: 15,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    connectButtonText: {
+      color: "#FFFFFF",
+      fontFamily: theme.fonts.families.openBold,
+      fontSize: 16,
+      letterSpacing: 0.5,
     },
     bioButton: {
       flexDirection: "row",

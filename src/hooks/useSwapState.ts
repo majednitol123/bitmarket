@@ -17,6 +17,7 @@ import {
   type Token,
 } from "../constants/tokenRegistry";
 import { notifyChainChanged, notifySwapReady } from "../services/notificationService";
+import { calculateToAmount } from "../utils/tokenPricing";
 
 // ═══════════════════════════════════════════════════════════
 // SWAP SETTINGS
@@ -33,13 +34,20 @@ export function useSwapState() {
   const dispatch = useDispatch<AppDispatch>();
   const settings = useSelector((state: RootState) => state.settings);
 
+  // Default tokens for initial chain (ETH and USDT on Ethereum)
+  const defaultFrom = TOKENS_BY_CHAIN["1"]?.[0] || null; // ETH
+  const defaultTo = TOKENS_BY_CHAIN["1"]?.[1] || null; // USDT
+
   // ─── Exchange state ───
   const [fromAmount, setFromAmount] = useState("");
   const [toAmount, setToAmount] = useState("");
   const [selectedChainFrom, setSelectedChainFrom] = useState<Chain>(CHAINS[0]);
   const [selectedChainTo, setSelectedChainTo] = useState<Chain>(CHAINS[0]);
-  const [selectedTokenFrom, setSelectedTokenFrom] = useState<Token | null>(null);
-  const [selectedTokenTo, setSelectedTokenTo] = useState<Token | null>(null);
+  const [selectedTokenFrom, setSelectedTokenFrom] = useState<Token | null>(defaultFrom);
+  const [selectedTokenTo, setSelectedTokenTo] = useState<Token | null>(defaultTo);
+
+  // ─── Review Modal state ───
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
 
   // ─── Modal state ───
   const [chainModalVisible, setChainModalVisible] = useState(false);
@@ -120,16 +128,39 @@ export function useSwapState() {
     setTokenModalVisible(true);
   }, []);
 
+  const handleFromAmountChange = useCallback(
+    (val: string) => {
+      setFromAmount(val);
+      const calculated = calculateToAmount(
+        val,
+        selectedTokenFrom?.symbol,
+        selectedTokenTo?.symbol
+      );
+      setToAmount(calculated);
+    },
+    [selectedTokenFrom, selectedTokenTo]
+  );
+
   const selectToken = useCallback(
     (token: Token) => {
       if (tokenModalTarget === "from") {
         setSelectedTokenFrom(token);
+        if (fromAmount) {
+          setToAmount(
+            calculateToAmount(fromAmount, token.symbol, selectedTokenTo?.symbol)
+          );
+        }
       } else {
         setSelectedTokenTo(token);
+        if (fromAmount) {
+          setToAmount(
+            calculateToAmount(fromAmount, selectedTokenFrom?.symbol, token.symbol)
+          );
+        }
       }
       setTokenModalVisible(false);
     },
-    [tokenModalTarget]
+    [tokenModalTarget, fromAmount, selectedTokenFrom, selectedTokenTo]
   );
 
   const toggleFavorite = useCallback((symbol: string) => {
@@ -195,12 +226,15 @@ export function useSwapState() {
     // Exchange
     fromAmount,
     setFromAmount,
+    handleFromAmountChange,
     toAmount,
     setToAmount,
     selectedChainFrom,
     selectedChainTo,
     selectedTokenFrom,
+    setSelectedTokenFrom,
     selectedTokenTo,
+    setSelectedTokenTo,
     displayChain,
 
     // Modals
@@ -215,6 +249,8 @@ export function useSwapState() {
     activeChainForModal,
     filteredTokens,
     favorites,
+    reviewModalVisible,
+    setReviewModalVisible,
 
     // Settings
     settingsOpen,

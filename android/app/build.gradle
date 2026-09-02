@@ -94,6 +94,15 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace 'com.anonymous.rncryptowallet'
+        splits {
+        abi {
+            enable true
+            reset()
+            include "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+            universalApk false
+        }
+    }
+
     defaultConfig {
         applicationId 'com.bitmarket.app'
         minSdkVersion rootProject.ext.minSdkVersion

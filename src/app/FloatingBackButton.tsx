@@ -4,14 +4,19 @@ import { useRouter, useSegments } from "expo-router";
 import { useTheme } from "styled-components/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import LeftIcon from "../assets/svg/left-arrow.svg";
+import { ROUTES } from "../constants/routes";
 
 const DISABLED_ROUTES = [
   "index",
+  "set-password",
   "wallet-setup",
   "wallet-created-successfully",
   "unlock",
+  "biometrics",
+  "forgot-password",
   "camera",
   "(app)",
+  "(wallet)",
 ];
 
 const getHeaderTitle = (lastSegment: string): string => {
@@ -31,15 +36,22 @@ export default function FloatingBackButton(props?: any) {
 
   const routeName = props?.route?.name;
 
-  // 1. If we are in the outer stack and the active route is inside the (app) folder, return null
-  // to prevent double headers on all screens within (app)
-  if (routeName && (routeName === "(app)" || routeName.startsWith("(app)/"))) {
+  // If we are in (app) or (wallet) routes which manage their own navigation headers, return null
+  if (
+    routeName &&
+    (routeName === "(app)" ||
+      routeName.startsWith("(app)/") ||
+      routeName === "(wallet)" ||
+      routeName.startsWith("(wallet)/"))
+  ) {
     return null;
   }
 
   const lastSegment = routeName
     ? routeName.split("/").pop()
-    : (segments && segments.length > 0 ? segments[segments.length - 1] : "");
+    : segments && segments.length > 0
+    ? segments[segments.length - 1]
+    : "";
 
   // If it's an empty route or listed in DISABLED_ROUTES, do not show
   if (!lastSegment || DISABLED_ROUTES.includes(lastSegment)) return null;
@@ -50,7 +62,7 @@ export default function FloatingBackButton(props?: any) {
       return;
     }
 
-    router.replace("/wallet-setup");
+    router.replace(ROUTES.home as any);
   };
 
   const title = getHeaderTitle(lastSegment);
@@ -62,7 +74,7 @@ export default function FloatingBackButton(props?: any) {
         hitSlop={12}
         style={[
           styles.container,
-          { top: insets.top + (Platform.OS === "android" ? 8 : 12) }
+          { top: insets.top + (Platform.OS === "android" ? 8 : 12) },
         ]}
       >
         <LeftIcon width={32} height={32} fill={theme.colors.white} />
@@ -74,14 +86,10 @@ export default function FloatingBackButton(props?: any) {
     <View
       style={[
         styles.headerContainer,
-        { top: insets.top + (Platform.OS === "android" ? 6 : 10) }
+        { top: insets.top + (Platform.OS === "android" ? 6 : 10) },
       ]}
     >
-      <Pressable
-        onPress={goBack}
-        hitSlop={12}
-        style={styles.backButton}
-      >
+      <Pressable onPress={goBack} hitSlop={12} style={styles.backButton}>
         <LeftIcon width={32} height={32} fill={theme.colors.white} />
       </Pressable>
       <Text
@@ -91,7 +99,7 @@ export default function FloatingBackButton(props?: any) {
           {
             color: theme.colors.white,
             fontFamily: theme.fonts.families.openBold,
-          }
+          },
         ]}
       >
         {title}

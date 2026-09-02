@@ -76,7 +76,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   // Android notification channel (iOS uses categories instead, handled by the OS)
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("wallet", {
-      name: "Wallet Notifications",
+      name: "BitMarket Alerts",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#8B5CF6",
@@ -113,16 +113,16 @@ export async function sendLocalNotification(
 export async function notifyWalletConnected(address: string): Promise<void> {
   const shortAddr = `${address.slice(0, 6)}...${address.slice(-4)}`;
   await sendLocalNotification(
-    "🔗 Wallet Connected",
-    `Your wallet ${shortAddr} is now connected to BitMarket.`,
+    "🔗 Account Connected",
+    `Your account ${shortAddr} is now connected to BitMarket.`,
     { type: "wallet_connected", address }
   );
 }
 
 export async function notifyWalletDisconnected(): Promise<void> {
   await sendLocalNotification(
-    "🔓 Wallet Disconnected",
-    "Your wallet has been disconnected from BitMarket.",
+    "🔓 Account Disconnected",
+    "Your account has been disconnected from BitMarket.",
     { type: "wallet_disconnected" }
   );
 }

@@ -79,34 +79,34 @@ export type ThemeType = {
 
 export const DarkTheme: ThemeType = {
   colors: {
-    // Premium dark crypto palette (Vibrant Purple & Deep Violet)
+    // Premium dark crypto palette (Vibrant Purple & Sleek Dark Slate)
     primary: "#8B5CF6",          // Vibrant purple - primary accent
     primaryLight: "#A78BFA",     // Soft purple
     gold: "#8B5CF6",
     blue: "#8B5CF6",             // Purple accent
-    dark: "#0B0E1A",             // Deep navy black background
-    darker: "#070913",           // Even darker
-    lightDark: "#121526",        // Card/surface background
-    cardBackground: "#161B2E",   // Sleek dark card bg
+    dark: "#0B0E17",             // Deep sleek dark slate background (matches screenshot 2)
+    darker: "#070910",           // Even darker slate
+    lightDark: "#111522",        // Card/surface background
+    cardBackground: "#131827",   // Sleek dark card bg (matches screenshot 2)
     accent: "#A855F7",           // Radiant purple accent
-    background: "#0B0E1A",
+    background: "#0B0E17",
     highlight: "#A855F7",
     white: "#FFFFFF",
     offWhite: "#F5F5F5",
-    lightGrey: "#8A8F9E",        // Secondary text
-    grey: "#5A6072",             // Muted elements
-    muted: "#2E344D",            // Borders, dividers
-    error: "#FF4D4F",
-    success: "#00C087",
+    lightGrey: "#94A3B8",        // Secondary text (slate-400)
+    grey: "#64748B",             // Muted elements (slate-500)
+    muted: "#1E293B",            // Borders, dividers
+    error: "#EF4444",
+    success: "#10B981",
     ethereum: "#627EEA",
     solana: "#00DCFA",
-    border: "#252B42",
-    borderLight: "#343B58",
+    border: "#1F2639",           // Subtle sleek border (matches screenshot 2)
+    borderLight: "#2A334D",
     // Gradients
-    primaryLinearGradient: ["#0B0E1A", "#0F1030", "#1A1050"] as const,
-    secondaryLinearGradient: ["#161B2E", "#0B0E1A"] as const,
-    cardGradient: ["#161B2E", "#121526"] as const,
-    headerGradient: ["rgba(11, 14, 26, 0.95)", "rgba(11, 14, 26, 0)"] as const,
+    primaryLinearGradient: ["#0B0E17", "#0D111E", "#0B0E17"] as const,
+    secondaryLinearGradient: ["#131827", "#0B0E17"] as const,
+    cardGradient: ["#131827", "#101422"] as const,
+    headerGradient: ["rgba(11, 14, 23, 0.95)", "rgba(11, 14, 23, 0)"] as const,
     buttonGradient: ["#7C3AED", "#A855F7"] as const,
     darkText: "#FFFFFF",
     realWhite: "#FFFFFF",

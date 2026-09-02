@@ -13,7 +13,7 @@ export interface SettingsState {
 }
 
 const initialState: SettingsState = {
-  themeMode: "system",
+  themeMode: "dark",
   slippage: "0.5",
   customSlippage: "",
   slippageAuto: true,

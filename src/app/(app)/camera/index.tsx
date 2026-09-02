@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, Platform } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "styled-components/native";
 import {
   CameraView,
@@ -16,6 +16,7 @@ import CameraIcon from "../../../assets/svg/camera.svg";
 import QRCodeCamera from "../../../assets/svg/qr-code-camera.svg";
 import CloseIcon from "../../../assets/svg/close.svg";
 import LeftArrow from "../../../assets/svg/left-arrow.svg";
+import { ROUTES } from "../../../constants/routes";
 
 export default function Camera() {
   const theme = useTheme() as ThemeType;
@@ -40,12 +41,20 @@ export default function Camera() {
     router.back();
   };
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace(ROUTES.home as any);
+    }
+  };
+
   const renderPermissionScreen = (title: string, subtitle: string, buttonTitle: string, isDenied = false) => (
     <LinearGradientBackground colors={theme.colors.primaryLinearGradient}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <LeftArrow color={theme.colors.white} width={24} height={24} />
+          <TouchableOpacity onPress={handleBack} style={styles.backButton} hitSlop={12}>
+            <LeftArrow color={theme.colors.white} width={22} height={22} />
           </TouchableOpacity>
         </View>
 
@@ -167,8 +176,12 @@ function createStyles(theme: ThemeType) {
       paddingTop: 10,
     },
     backButton: {
-      width: 40,
-      height: 40,
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      backgroundColor: theme.colors.cardBackground,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
       justifyContent: "center",
       alignItems: "center",
     },

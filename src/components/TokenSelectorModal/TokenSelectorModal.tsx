@@ -13,6 +13,7 @@ import { useTheme } from "styled-components/native";
 import type { ThemeType } from "../../styles/theme";
 import { BlockchainIcon } from "../BlockchainIcon/BlockchainIcon";
 import CloseIcon from "../../assets/svg/close.svg";
+import { SearchIcon } from "../Icons/AppIcons";
 import type { Chain, Token } from "../../constants/tokenRegistry";
 
 // ═══════════════════════════════════════════════════════════
@@ -126,7 +127,7 @@ export function TokenSelectorModal({
             style={styles.searchBarGradient}
           >
             <View style={styles.searchBar}>
-              <Text style={styles.searchIcon}>🔍</Text>
+              <SearchIcon size={16} color={theme.colors.lightGrey} strokeWidth={2} />
               <TextInput
                 style={styles.searchInput}
                 value={tokenSearch}

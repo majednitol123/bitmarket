@@ -77,13 +77,14 @@ const Button: React.FC<ButtonProps> = ({
   const theme = useTheme() as ThemeType;
   const gradientColors = linearGradient || theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const);
 
-  if (backgroundColor) {
+  // If an explicit non-primary background color was provided (e.g. secondary or danger button), use solid color
+  if (backgroundColor && backgroundColor !== theme.colors.primary) {
     return (
       <ButtonContainer
         disabled={disabled}
         backgroundColor={backgroundColor}
         onPress={disabled ? undefined : onPress}
-        style={{ opacity: disabled ? 0.5 : 1 }}
+        style={{ opacity: disabled ? 0.5 : 1, borderRadius: 14 }}
       >
         {!loading ? (
           <Row theme={theme}>
@@ -101,13 +102,14 @@ const Button: React.FC<ButtonProps> = ({
     <ButtonContainer
       disabled={disabled}
       onPress={disabled ? undefined : onPress}
-      style={{ opacity: disabled ? 0.5 : 1 }}
+      style={{ opacity: disabled ? 0.5 : 1, borderRadius: 14 }}
     >
       <LinearGradientBackground
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         colors={gradientColors}
         theme={theme}
+        style={{ borderRadius: 14 }}
       >
         {!loading ? (
           <Row theme={theme}>

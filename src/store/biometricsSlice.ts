@@ -56,8 +56,8 @@ export const authenticateBiometric = createAsyncThunk<
     if (!hasHardware) return rejectWithValue("Biometric hardware not available.");
 
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: "Authenticate to access your wallet",
-      fallbackLabel: "Use password instead",
+      promptMessage: "Authenticate to access BitMarket",
+      fallbackLabel: "Use passcode instead",
       disableDeviceFallback: true,
       cancelLabel: "Cancel",
     });
@@ -111,6 +111,23 @@ export const setWalletPassword = createAsyncThunk<
     return true;
   } catch {
     return rejectWithValue("Failed to save password securely.");
+  }
+});
+
+/**
+ * Check whether a wallet password is saved in SecureStore.
+ * Hardware-level ground truth for password existence.
+ */
+export const checkPasswordSet = createAsyncThunk<
+  boolean,
+  void,
+  { state: RootState }
+>("auth/checkPasswordSet", async () => {
+  try {
+    const saved = await SecureStore.getItemAsync(PASSWORD_KEY);
+    return !!saved && saved.length > 0;
+  } catch {
+    return false;
   }
 });
 
@@ -300,6 +317,11 @@ const lockSlice = createSlice({
     builder.addCase(setWalletPassword.rejected, (state, action) => {
       state.status = "rejected";
       state.errorMessage = action.payload || "Failed to set password.";
+    });
+
+    // ─── Check Password Set (SecureStore ground truth) ───
+    builder.addCase(checkPasswordSet.fulfilled, (state, action) => {
+      state.passwordSet = action.payload;
     });
 
     // ─── Verify Password ───

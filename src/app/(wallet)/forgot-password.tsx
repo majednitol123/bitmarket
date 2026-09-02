@@ -17,6 +17,7 @@ import { ROUTES } from "../../constants/routes";
 import { MotiView } from "moti";
 import LockIcon from "../../assets/svg/lock.svg";
 import KeyIcon from "../../assets/svg/key.svg";
+import { ChevronLeftIcon } from "../../components/Icons/AppIcons";
 
 export default function ForgotPasswordScreen() {
   const theme = useTheme() as ThemeType;
@@ -47,7 +48,6 @@ export default function ForgotPasswordScreen() {
   // Navigate to home after successful reset
   useEffect(() => {
     if (unlocked) {
-      router.dismissAll();
       router.replace(ROUTES.home);
     }
   }, [unlocked]);
@@ -141,6 +141,24 @@ export default function ForgotPasswordScreen() {
   return (
     <LinearGradientBackground colors={theme.colors.primaryLinearGradient}>
       <SafeAreaView style={styles.container}>
+        {/* Back Button */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            style={styles.backButton}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace(ROUTES.unlock);
+              }
+            }}
+            hitSlop={12}
+          >
+            <ChevronLeftIcon size={20} color={theme.colors.white} strokeWidth={2.2} />
+          </TouchableOpacity>
+        </View>
+
         <KeyboardAwareScrollView
           contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
           keyboardShouldPersistTaps="handled"
@@ -158,11 +176,11 @@ export default function ForgotPasswordScreen() {
               <View style={styles.iconCircle}>
                 <KeyIcon color={theme.colors.primary} width={32} height={32} />
               </View>
-              <Text style={styles.title}>Reset Password</Text>
+              <Text style={styles.title}>Reset Passcode</Text>
               <Text style={styles.subtitle}>
                 {step === "phrase"
-                  ? "Enter your 12 or 24-word recovery phrase to verify ownership of this wallet."
-                  : "Create a new password to secure your wallet."}
+                  ? "Enter your 12 or 24-word recovery phrase to verify authorization."
+                  : "Create a new passcode to protect BitMarket."}
               </Text>
             </MotiView>
 
@@ -209,8 +227,8 @@ export default function ForgotPasswordScreen() {
                 <View>
                   <MotiView
                     animate={{
-                      borderColor: isFocusedPhrase ? theme.colors.primary : theme.colors.border,
-                      backgroundColor: isFocusedPhrase ? "rgba(55, 114, 255, 0.08)" : theme.colors.dark,
+                      borderColor: isFocusedPhrase ? "rgba(139, 92, 246, 0.85)" : "rgba(139, 92, 246, 0.25)",
+                      backgroundColor: theme.colors.dark,
                     }}
                     transition={{ type: "timing", duration: 200 }}
                     style={styles.phraseInputWrapper}
@@ -247,7 +265,6 @@ export default function ForgotPasswordScreen() {
                   <View style={styles.buttonWrapper}>
                     <Button
                       title="Continue"
-                      backgroundColor={theme.colors.primary}
                       color={theme.colors.realWhite}
                       onPress={handleResetPassword}
                       disabled={isLocked}
@@ -259,14 +276,14 @@ export default function ForgotPasswordScreen() {
                 <View>
                   <MotiView
                     animate={{
-                      borderColor: isFocusedPw1 ? theme.colors.primary : theme.colors.border,
-                      backgroundColor: isFocusedPw1 ? "rgba(55, 114, 255, 0.08)" : theme.colors.dark,
+                      borderColor: isFocusedPw1 ? "rgba(139, 92, 246, 0.85)" : "rgba(139, 92, 246, 0.25)",
+                      backgroundColor: theme.colors.dark,
                     }}
                     transition={{ type: "timing", duration: 200 }}
                     style={styles.inputWrapper}
                   >
                     <KeyIcon
-                      color={isFocusedPw1 ? theme.colors.primary : theme.colors.lightGrey}
+                      color={isFocusedPw1 ? theme.colors.primaryLight : theme.colors.lightGrey}
                       width={20}
                       height={20}
                       style={{ marginRight: 12 }}
@@ -310,14 +327,14 @@ export default function ForgotPasswordScreen() {
 
                   <MotiView
                     animate={{
-                      borderColor: isFocusedPw2 ? theme.colors.primary : theme.colors.border,
-                      backgroundColor: isFocusedPw2 ? "rgba(55, 114, 255, 0.08)" : theme.colors.dark,
+                      borderColor: isFocusedPw2 ? "rgba(139, 92, 246, 0.85)" : "rgba(139, 92, 246, 0.25)",
+                      backgroundColor: theme.colors.dark,
                     }}
                     transition={{ type: "timing", duration: 200 }}
                     style={styles.inputWrapper}
                   >
                     <KeyIcon
-                      color={isFocusedPw2 ? theme.colors.primary : theme.colors.lightGrey}
+                      color={isFocusedPw2 ? theme.colors.primaryLight : theme.colors.lightGrey}
                       width={20}
                       height={20}
                       style={{ marginRight: 12 }}
@@ -376,13 +393,28 @@ function createStyles(theme: ThemeType) {
     container: {
       flex: 1,
       padding: parseFloat(theme.spacing.large as string),
-      paddingTop: 60,
+      paddingTop: 12,
+    },
+    headerRow: {
+      marginBottom: 16,
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    backButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      backgroundColor: theme.colors.cardBackground,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      justifyContent: "center",
+      alignItems: "center",
     },
     card: {
       backgroundColor: theme.colors.cardBackground,
       borderRadius: 24,
-      padding: 32,
-      paddingHorizontal: 24,
+      padding: 28,
+      paddingHorizontal: 22,
       borderWidth: 1,
       borderColor: theme.colors.border,
       width: "100%",
@@ -391,7 +423,9 @@ function createStyles(theme: ThemeType) {
       width: 64,
       height: 64,
       borderRadius: 32,
-      backgroundColor: "rgba(55, 114, 255, 0.15)",
+      backgroundColor: "rgba(139, 92, 246, 0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(139, 92, 246, 0.25)",
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 20,
@@ -413,9 +447,10 @@ function createStyles(theme: ThemeType) {
       lineHeight: 22,
     },
     phraseInputWrapper: {
-      borderRadius: 14,
-      borderWidth: 2,
-      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.dark,
+      borderRadius: 16,
+      borderWidth: 1.5,
+      borderColor: "rgba(139, 92, 246, 0.25)",
       paddingHorizontal: 16,
       paddingVertical: 12,
       marginBottom: 12,
@@ -438,7 +473,9 @@ function createStyles(theme: ThemeType) {
     warningContainer: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: "rgba(55, 114, 255, 0.08)",
+      backgroundColor: "rgba(139, 92, 246, 0.1)",
+      borderWidth: 1,
+      borderColor: "rgba(139, 92, 246, 0.2)",
       borderRadius: 10,
       paddingVertical: 10,
       paddingHorizontal: 14,
@@ -448,13 +485,14 @@ function createStyles(theme: ThemeType) {
     warningText: {
       fontFamily: theme.fonts.families.openRegular,
       fontSize: parseFloat(theme.fonts.sizes.small as string),
-      color: theme.colors.primary,
+      color: theme.colors.primaryLight,
       flex: 1,
       lineHeight: 18,
     },
     inputWrapper: {
-      borderRadius: 14,
-      borderWidth: 2,
+      backgroundColor: theme.colors.dark,
+      borderRadius: 16,
+      borderWidth: 1.5,
       borderColor: theme.colors.border,
       paddingHorizontal: 16,
       marginBottom: 16,

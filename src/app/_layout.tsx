@@ -260,7 +260,7 @@ import {
   Roboto_400Regular as RobotoReg,
   Roboto_700Bold as RobotoBld,
 } from "@expo-google-fonts/roboto";
-import { lockWallet, UNLOCK_TIMEOUT, BACKGROUND_LOCK_TIMEOUT, loadBiometricPreference, checkBiometricAvailability } from "../store/biometricsSlice";
+import { lockWallet, UNLOCK_TIMEOUT, BACKGROUND_LOCK_TIMEOUT, loadBiometricPreference, checkBiometricAvailability, checkPasswordSet } from "../store/biometricsSlice";
 import { store, persistor, RootState } from "../store";
 import { AppKitProvider } from "@reown/appkit-react-native";
 import { appKit } from "../config/AppKitConfig";
@@ -367,9 +367,9 @@ function InnerApp() {
     };
   }, [unlockedAt]);
 
-  const themeMode = useSelector((state: RootState) => state.settings?.themeMode ?? "system");
+  const themeMode = useSelector((state: RootState) => state.settings?.themeMode ?? "dark");
   const systemColorScheme = useColorScheme();
-  const isDark = themeMode === "system" ? systemColorScheme === "dark" : themeMode === "dark";
+  const isDark = themeMode === "system" ? true : themeMode !== "light";
   const activeTheme = isDark ? DarkTheme : LightTheme;
 
   // Sync Redux themeMode to Native System & Appearance
@@ -393,17 +393,17 @@ function InnerApp() {
 
           <Stack
             screenOptions={{
-              headerShown: true,
-              headerTransparent: true,
-              header: (props) => <FloatingBackButton {...props} />,
+              headerShown: false,
               gestureEnabled: true,
               animation: "slide_from_right",
             }}
           >
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(wallet)/setup/wallet-created-successfully" />
-            <Stack.Screen name="(wallet)/unlock" />
-            <Stack.Screen name="(wallet)/forgot-password" />
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="(wallet)/setup/set-password" options={{ headerShown: false }} />
+            <Stack.Screen name="(wallet)/setup/wallet-created-successfully" options={{ headerShown: false }} />
+            <Stack.Screen name="(wallet)/unlock" options={{ headerShown: false }} />
+            <Stack.Screen name="(wallet)/biometrics/index" options={{ headerShown: false }} />
+            <Stack.Screen name="(wallet)/forgot-password" options={{ headerShown: false }} />
             <Stack.Screen name="(app)" options={{ headerShown: false, gestureEnabled: false }} />
           </Stack>
         </KeyboardProvider>
@@ -426,13 +426,13 @@ function RootLayoutComponent() {
   useEffect(() => {
     const initAuth = async () => {
       try {
+        // Check password existence in hardware SecureStore (source of truth)
+        await store.dispatch(checkPasswordSet());
         // Load biometric preference and device capability
-        store.dispatch(loadBiometricPreference());
-        store.dispatch(checkBiometricAvailability());
+        await store.dispatch(loadBiometricPreference());
+        await store.dispatch(checkBiometricAvailability());
 
         // Always lock on cold start (app kill = lock screen)
-        // The REHYDRATE handler in biometricsSlice also enforces this,
-        // but we dispatch explicitly as a safety net.
         store.dispatch(lockWallet());
       } catch (e) {
         console.warn("Failed to initialize auth state", e);

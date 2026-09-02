@@ -8,12 +8,22 @@ import { authenticateBiometric, saveBiometricPreference, checkBiometricAvailabil
 import { Switch, Alert, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradientBackground } from "../../../components/Styles/Gradient";
-import Svg, { Path, Circle } from "react-native-svg";
 import { setThemeMode, ThemeMode, setNotificationsEnabled } from "../../../store/settingsSlice";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as Notifications from "expo-notifications";
 import { notifyNotificationsToggled } from "../../../services/notificationService";
-import FingerprintIcon from "../../../assets/svg/edit.svg";
+import {
+  BellIcon,
+  ShieldCheckIcon,
+  MoonIcon,
+  SunIcon,
+  SystemIcon,
+  GlobeIcon,
+  DollarIcon,
+  HelpCircleIcon,
+  InfoIcon,
+} from "../../../components/Icons/AppIcons";
+import Header from "../../../components/Header/Header";
 
 const ScrollContainer = styled.ScrollView`
   flex: 1;
@@ -124,33 +134,6 @@ const ThemeOptionText = styled.Text<{ theme: ThemeType; active: boolean }>`
     active ? theme.colors.darkText : theme.colors.white};
   margin-left: 8px;
 `;
-
-const SunIcon = ({ color }: { color: string }) => (
-  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Circle cx="12" cy="12" r="5" />
-    <Path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-  </Svg>
-);
-
-const MoonIcon = ({ color }: { color: string }) => (
-  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
-  </Svg>
-);
-
-const SystemIcon = ({ color }: { color: string }) => (
-  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-    <Path d="M12 2A10 10 0 1 0 12 22A10 10 0 1 0 12 2Z" stroke={color} strokeWidth={2} />
-    <Path d="M12 2A10 10 0 0 1 12 22Z" fill={color} />
-  </Svg>
-);
-
-const BellIcon = ({ color }: { color: string }) => (
-  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-    <Path d="M13.73 21a2 2 0 0 1-3.46 0" />
-  </Svg>
-);
 
 const SettingsIndex = () => {
   const theme = useTheme();
@@ -263,8 +246,9 @@ const SettingsIndex = () => {
   return (
     <LinearGradientBackground colors={theme.colors.primaryLinearGradient}>
       <SafeAreaContainer edges={["bottom", "left", "right"]}>
+        <Header title="Settings" />
         <ScrollContainer showsVerticalScrollIndicator={false}>
-          <ContentContainer style={{ paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }}>
+          <ContentContainer style={{ paddingTop: 8, paddingBottom: insets.bottom + 40 }}>
             {/* Notifications Group */}
             <SettingsGroup>
               <GroupTitle>Notifications</GroupTitle>
@@ -281,7 +265,7 @@ const SettingsIndex = () => {
                       <OptionText>Activity Notifications</OptionText>
                       <OptionSubtext>
                         {notificationsEnabled
-                          ? "Wallet events & swap activity alerts enabled"
+                          ? "Trade events & swap activity alerts enabled"
                           : "Activity notifications are turned off"}
                       </OptionSubtext>
                     </View>
@@ -306,7 +290,7 @@ const SettingsIndex = () => {
                 <OptionRow>
                   <OptionLeft>
                     <IconCircle>
-                      <FingerprintIcon width={20} height={20} fill={theme.colors.primary} />
+                      <ShieldCheckIcon size={20} color={theme.colors.primary} strokeWidth={2.2} />
                     </IconCircle>
                     <View style={{ flex: 1 }}>
                       <OptionText>Enable FaceID / TouchID </OptionText>

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   RefreshControl,
   StyleSheet,
@@ -22,11 +22,22 @@ import { BlockchainIcon } from "../../components/BlockchainIcon/BlockchainIcon";
 import { SwapSettingsBottomSheet } from "../../components/SwapSettingsBottomSheet/SwapSettingsBottomSheet";
 import { ChainSelectorModal } from "../../components/ChainSelectorModal/ChainSelectorModal";
 import { TokenSelectorModal } from "../../components/TokenSelectorModal/TokenSelectorModal";
-import SettingsIcon from "../../assets/svg/settings.svg";
+import { SwapReviewModal } from "../../components/SwapReviewModal/SwapReviewModal";
+import {
+  SwapIcon,
+  ChevronRightIcon,
+  SettingsIcon,
+  LightningIcon,
+  GasIcon,
+} from "../../components/Icons/AppIcons";
+
+import { getTokenPrice } from "../../utils/tokenPricing";
 
 // ═══════════════════════════════════════════════════════════
 // MAIN SCREEN
 // ═══════════════════════════════════════════════════════════
+
+const PERCENTAGE_PRESETS = ["25%", "50%", "75%", "MAX"];
 
 export default function Index() {
   const insets = useSafeAreaInsets();
@@ -41,14 +52,60 @@ export default function Index() {
   // ─── Swap logic ───
   const swap = useSwapState();
 
+  // Handle Quick Market Mover selection
+  const handleSelectMarketToken = useCallback(
+    (symbol: string) => {
+      const match = swap.filteredTokens.find((t) => t.symbol.toUpperCase() === symbol.toUpperCase());
+      if (match) {
+        swap.setSelectedTokenTo(match);
+      }
+    },
+    [swap]
+  );
+
+  // Handle Percentage Preset Click
+  const handlePercentageSelect = (preset: string) => {
+    let amt = "1.0";
+    if (preset === "MAX") {
+      amt = "1.0";
+    } else if (preset === "75%") {
+      amt = "0.75";
+    } else if (preset === "50%") {
+      amt = "0.50";
+    } else if (preset === "25%") {
+      amt = "0.25";
+    }
+    swap.handleFromAmountChange(amt);
+  };
+
+  const handleMainAction = () => {
+    if (!isConnected) {
+      open();
+    } else {
+      if (!swap.fromAmount || Number(swap.fromAmount) <= 0) {
+        swap.handleFromAmountChange("1.0");
+      }
+      swap.setReviewModalVisible(true);
+    }
+  };
+
+  const fromSymbol = swap.selectedTokenFrom?.symbol || "ETH";
+  const toSymbol = swap.selectedTokenTo?.symbol || "USDC";
+
   return (
     <SafeAreaContainer edges={["bottom", "left", "right"]}>
-      <Header />
+      {/* ═══ Header with Drawer Toggle & Network Selector ═══ */}
+      <Header
+        currentChainName={swap.displayChain.name}
+        onOpenChainModal={() => swap.openChainModal("from")}
+      />
+
       <ScrollView
         contentContainerStyle={[
           styles.contentContainer,
           { paddingBottom: insets.bottom + 40 },
         ]}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             tintColor={theme.colors.primary}
@@ -63,32 +120,37 @@ export default function Index() {
           <View style={styles.exchangeHeader}>
             <View>
               <Text style={styles.exchangeTitle}>Exchange</Text>
-              <View style={styles.networkRow}>
-                <Text style={styles.networkLabel}>Network:</Text>
-                <TouchableOpacity
-                  style={styles.networkBadge}
-                  onPress={() => swap.openChainModal("from")}
-                >
-                  <Text style={styles.networkBadgeText}>
-                    {swap.displayChain.name}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.exchangeSub}>Best decentralized exchange rates</Text>
             </View>
             <TouchableOpacity
               style={styles.settingsButton}
               onPress={() => swap.setSettingsOpen(true)}
+              hitSlop={6}
             >
               <SettingsIcon
-                width={18}
-                height={18}
-                fill={theme.colors.lightGrey}
+                size={18}
+                color={theme.colors.lightGrey}
+                strokeWidth={2}
               />
             </TouchableOpacity>
           </View>
 
-          {/* ─── From Field ─── */}
-          <Text style={styles.fieldLabel}>From</Text>
+          {/* ─── From Field & Percentages ─── */}
+          <View style={styles.fieldHeaderRow}>
+            <Text style={styles.fieldLabel}>You Pay</Text>
+            <View style={styles.percentageRow}>
+              {PERCENTAGE_PRESETS.map((p) => (
+                <TouchableOpacity
+                  key={p}
+                  style={styles.percentagePill}
+                  onPress={() => handlePercentageSelect(p)}
+                >
+                  <Text style={styles.percentageText}>{p}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
           <LinearGradient
             colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
             start={{ x: 0, y: 0 }}
@@ -99,7 +161,7 @@ export default function Index() {
               <TextInput
                 style={styles.amountInput}
                 value={swap.fromAmount}
-                onChangeText={swap.setFromAmount}
+                onChangeText={swap.handleFromAmountChange}
                 placeholder="0.0"
                 placeholderTextColor={theme.colors.grey}
                 keyboardType="decimal-pad"
@@ -118,7 +180,7 @@ export default function Index() {
                     <Text style={styles.tokenSelectorText}>
                       {swap.selectedTokenFrom.symbol}
                     </Text>
-                    <Text style={styles.chevron}>›</Text>
+                    <ChevronRightIcon size={14} color={theme.colors.lightGrey} strokeWidth={2.5} />
                   </View>
                 ) : (
                   <View style={styles.tokenSelectorInner}>
@@ -129,33 +191,38 @@ export default function Index() {
                       <Text style={styles.selectTokenText}>Select</Text>
                       <Text style={styles.selectTokenText}>token</Text>
                     </View>
-                    <Text style={styles.chevron}>›</Text>
+                    <ChevronRightIcon size={14} color={theme.colors.lightGrey} strokeWidth={2.5} />
                   </View>
                 )}
               </TouchableOpacity>
             </View>
           </LinearGradient>
 
-          {/* ─── Swap Button ─── */}
+          {/* ─── Swap Direction Button ─── */}
           <View style={styles.swapButtonRow}>
             <TouchableOpacity
               style={styles.swapButton}
               onPress={swap.handleSwap}
               activeOpacity={0.7}
             >
-              <Animated.Text
-                style={[
-                  styles.swapIcon,
-                  { transform: [{ rotate: swap.rotateInterpolate }] },
-                ]}
+              <Animated.View
+                style={{
+                  transform: [{ rotate: swap.rotateInterpolate }],
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
               >
-                ⇅
-              </Animated.Text>
+                <SwapIcon size={18} color="#FFFFFF" strokeWidth={2.5} />
+              </Animated.View>
             </TouchableOpacity>
           </View>
 
           {/* ─── To Field ─── */}
-          <Text style={styles.fieldLabel}>To</Text>
+          <View style={styles.fieldHeaderRow}>
+            <Text style={styles.fieldLabel}>You Receive</Text>
+            <Text style={styles.estLabel}>Estimated</Text>
+          </View>
+
           <LinearGradient
             colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
             start={{ x: 0, y: 0 }}
@@ -185,7 +252,7 @@ export default function Index() {
                     <Text style={styles.tokenSelectorText}>
                       {swap.selectedTokenTo.symbol}
                     </Text>
-                    <Text style={styles.chevron}>›</Text>
+                    <ChevronRightIcon size={14} color={theme.colors.lightGrey} strokeWidth={2.5} />
                   </View>
                 ) : (
                   <View style={styles.tokenSelectorInner}>
@@ -196,17 +263,60 @@ export default function Index() {
                       <Text style={styles.selectTokenText}>Select</Text>
                       <Text style={styles.selectTokenText}>token</Text>
                     </View>
-                    <Text style={styles.chevron}>›</Text>
+                    <ChevronRightIcon size={14} color={theme.colors.lightGrey} strokeWidth={2.5} />
                   </View>
                 )}
               </TouchableOpacity>
             </View>
           </LinearGradient>
 
-          {/* ─── Connect Wallet Button ─── */}
+          {/* ─── Rate & Routing Summary Box ─── */}
+          <View style={styles.routeSummaryCard}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Rate</Text>
+              <Text style={styles.summaryValue}>
+                1 {fromSymbol} ≈{" "}
+                {(
+                  getTokenPrice(fromSymbol) / (getTokenPrice(toSymbol) || 1)
+                ).toLocaleString("en-US", {
+                  maximumFractionDigits: 4,
+                })}{" "}
+                {toSymbol}
+              </Text>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Route</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                <LightningIcon size={12} color="#10B981" strokeWidth={2.5} />
+                <Text style={styles.summaryHighlight}>
+                  Uniswap v3 & 1inch Split
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <TouchableOpacity
+                style={styles.slippageRow}
+                onPress={() => swap.setSettingsOpen(true)}
+              >
+                <Text style={styles.summaryLabel}>Max Slippage</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={styles.slippageValue}>{swap.slippage}%</Text>
+                  <SettingsIcon size={11} color={theme.colors.lightGrey} strokeWidth={2} />
+                </View>
+              </TouchableOpacity>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <GasIcon size={12} color={theme.colors.grey} strokeWidth={2} />
+                <Text style={styles.gasEstimate}>Est. ~$1.40</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* ─── Main Action Button ─── */}
           <TouchableOpacity
             activeOpacity={0.85}
-            onPress={() => open()}
+            onPress={handleMainAction}
             style={styles.connectButtonWrapper}
           >
             <LinearGradient
@@ -216,13 +326,30 @@ export default function Index() {
               style={styles.connectGradient}
             >
               <Text style={styles.connectButtonText}>
-                {isConnected ? "Connected" : "Connect Wallet"}
+                {isConnected ? "Review Swap" : "Connect Wallet"}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
 
         {/* ═══ Modals ═══ */}
+        <SwapReviewModal
+          visible={swap.reviewModalVisible}
+          onClose={() => swap.setReviewModalVisible(false)}
+          fromAmount={swap.fromAmount || "1.0"}
+          toAmount={
+            swap.toAmount ||
+            (
+              (Number(swap.fromAmount) || 1.0) *
+              (getTokenPrice(fromSymbol) / (getTokenPrice(toSymbol) || 1))
+            ).toFixed(2)
+          }
+          fromToken={swap.selectedTokenFrom}
+          toToken={swap.selectedTokenTo}
+          chain={swap.displayChain}
+          slippage={swap.slippage}
+        />
+
         <SwapSettingsBottomSheet
           isPresented={swap.settingsOpen}
           onDismiss={() => swap.setSettingsOpen(false)}
@@ -260,7 +387,7 @@ export default function Index() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// STYLES (only exchange card layout — modals/settings own theirs)
+// STYLES
 // ═══════════════════════════════════════════════════════════
 
 function createStyles(theme: ThemeType, insets: EdgeInsets) {
@@ -277,48 +404,34 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
     // ═══ Exchange Card ═══
     exchangeCard: {
       backgroundColor: theme.colors.cardBackground,
-      borderRadius: 20,
-      padding: 20,
+      borderRadius: 22,
+      padding: 18,
       borderWidth: 1,
       borderColor: theme.colors.border,
+      marginBottom: 6,
     },
     exchangeHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
-      alignItems: "flex-start",
-      marginBottom: 20,
+      alignItems: "center",
+      marginBottom: 16,
     },
     exchangeTitle: {
       color: theme.colors.white,
       fontFamily: theme.fonts.families.openBold,
       fontSize: 22,
-      marginBottom: 6,
+      fontWeight: "800",
     },
-    networkRow: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-    networkLabel: {
-      color: theme.colors.lightGrey,
+    exchangeSub: {
+      color: theme.colors.grey,
       fontFamily: theme.fonts.families.openRegular,
       fontSize: 12,
-      marginRight: 6,
-    },
-    networkBadge: {
-      backgroundColor: "rgba(139, 92, 246, 0.15)",
-      paddingHorizontal: 10,
-      paddingVertical: 3,
-      borderRadius: 6,
-    },
-    networkBadgeText: {
-      color: theme.colors.primary,
-      fontFamily: theme.fonts.families.openBold,
-      fontSize: 11,
+      marginTop: 2,
     },
     settingsButton: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 38,
+      height: 38,
+      borderRadius: 12,
       backgroundColor: theme.colors.dark,
       borderWidth: 1,
       borderColor: theme.colors.border,
@@ -327,12 +440,39 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
     },
 
     // ─── Input Fields ───
-    fieldLabel: {
-      color: theme.colors.lightGrey,
-      fontFamily: theme.fonts.families.openRegular,
-      fontSize: 12,
+    fieldHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
       marginBottom: 8,
       marginLeft: 2,
+    },
+    fieldLabel: {
+      color: theme.colors.lightGrey,
+      fontFamily: theme.fonts.families.openBold,
+      fontSize: 13,
+    },
+    estLabel: {
+      color: theme.colors.grey,
+      fontSize: 11,
+      fontWeight: "500",
+    },
+    percentageRow: {
+      flexDirection: "row",
+      gap: 6,
+    },
+    percentagePill: {
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 6,
+      backgroundColor: "rgba(124, 58, 237, 0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(124, 58, 237, 0.25)",
+    },
+    percentageText: {
+      color: theme.colors.primaryLight,
+      fontSize: 11,
+      fontWeight: "700",
     },
     inputGradientBorder: {
       borderRadius: 16,
@@ -345,13 +485,13 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       backgroundColor: theme.colors.dark,
       borderRadius: 14.5,
       paddingHorizontal: 16,
-      paddingVertical: 14,
+      paddingVertical: 12,
     },
     amountInput: {
       flex: 1,
       color: theme.colors.white,
       fontFamily: theme.fonts.families.openRegular,
-      fontSize: 26,
+      fontSize: 24,
       paddingVertical: 4,
     },
     tokenSelector: {
@@ -420,14 +560,60 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       fontSize: 20,
     },
 
+    // ─── Route Summary Card ───
+    routeSummaryCard: {
+      backgroundColor: theme.colors.dark,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: 12,
+      marginTop: 14,
+      gap: 8,
+    },
+    summaryRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    summaryLabel: {
+      color: theme.colors.lightGrey,
+      fontSize: 12,
+      fontWeight: "500",
+    },
+    summaryValue: {
+      color: theme.colors.white,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    summaryHighlight: {
+      color: "#10B981",
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    slippageRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+    },
+    slippageValue: {
+      color: theme.colors.primaryLight,
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    gasEstimate: {
+      color: theme.colors.grey,
+      fontSize: 11,
+      fontWeight: "500",
+    },
+
     // ─── Connect Button ───
     connectButtonWrapper: {
-      marginTop: 20,
+      marginTop: 16,
       borderRadius: 14,
       overflow: "hidden",
     },
     connectGradient: {
-      paddingVertical: 16,
+      paddingVertical: 15,
       borderRadius: 14,
       alignItems: "center",
       justifyContent: "center",

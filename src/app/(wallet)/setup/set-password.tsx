@@ -31,7 +31,8 @@ const IconCircle = styled.View<{ theme: ThemeType }>`
   width: 64px;
   height: 64px;
   border-radius: 32px;
-  background-color: rgba(55, 114, 255, 0.15);
+  background-color: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.25);
   justify-content: center;
   align-items: center;
   margin-bottom: 20px;
@@ -179,10 +180,9 @@ export default function SetPasswordScreen() {
               animate={{ opacity: 1, translateY: 0 }}
               transition={{ type: "timing", duration: 600, delay: 400 }}
             >
-              <Title>Secure Your Wallet</Title>
+              <Title>Protect BitMarket</Title>
               <Subtitle>
-                Create a password to protect your wallet. You’ll need this password
-                to unlock your wallet.
+                Create a passcode to secure BitMarket and protect your trading sessions. You’ll use this passcode to unlock the app.
               </Subtitle>
             </MotiView>
 
@@ -193,9 +193,8 @@ export default function SetPasswordScreen() {
             >
               <MotiView
                 animate={{
-                  borderColor: isFocused1 ? theme.colors.primary : theme.colors.border,
-                  borderWidth: isFocused1 ? 2 : 1,
-                  backgroundColor: isFocused1 ? "rgba(55, 114, 255, 0.08)" : theme.colors.dark,
+                  borderColor: isFocused1 ? "rgba(139, 92, 246, 0.85)" : "rgba(139, 92, 246, 0.25)",
+                  backgroundColor: theme.colors.dark,
                 }}
                 transition={{ type: "timing", duration: 200 }}
                 style={localStyles.inputWrapper}
@@ -204,7 +203,7 @@ export default function SetPasswordScreen() {
                 <TextInput
                   style={[localStyles.input, { color: theme.colors.white }]}
                   secureTextEntry
-                  placeholder="Enter password"
+                  placeholder="Enter passcode"
                   placeholderTextColor={theme.colors.lightGrey}
                   value={password}
                   onChangeText={setPassword}
@@ -230,9 +229,8 @@ export default function SetPasswordScreen() {
 
               <MotiView
                 animate={{
-                  borderColor: isFocused2 ? theme.colors.primary : theme.colors.border,
-                  borderWidth: isFocused2 ? 2 : 1,
-                  backgroundColor: isFocused2 ? "rgba(55, 114, 255, 0.08)" : theme.colors.dark,
+                  borderColor: isFocused2 ? "rgba(139, 92, 246, 0.85)" : "rgba(139, 92, 246, 0.25)",
+                  backgroundColor: theme.colors.dark,
                 }}
                 transition={{ type: "timing", duration: 200 }}
                 style={localStyles.inputWrapper}
@@ -241,7 +239,7 @@ export default function SetPasswordScreen() {
                 <TextInput
                   style={[localStyles.input, { color: theme.colors.white }]}
                   secureTextEntry
-                  placeholder="Confirm password"
+                  placeholder="Confirm passcode"
                   placeholderTextColor={theme.colors.lightGrey}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
@@ -258,7 +256,7 @@ export default function SetPasswordScreen() {
             >
               <ButtonWrapper>
                 <Button
-                  title="Set Password"
+                  title="Set Passcode"
                   backgroundColor={theme.colors.primary}
                   color={theme.colors.realWhite}
                   onPress={handleSetPassword}
@@ -274,7 +272,8 @@ export default function SetPasswordScreen() {
 
 const localStyles = StyleSheet.create({
   inputWrapper: {
-    borderRadius: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
     paddingHorizontal: 16,
     marginBottom: 16,
     flexDirection: "row",

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { BackHandler, SafeAreaView } from "react-native";
+import { BackHandler, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import styled, { useTheme } from "styled-components/native";
 import { useDispatch, useSelector } from "react-redux";
@@ -11,11 +12,23 @@ import { LinearGradientBackground } from "../../../components/Styles/Gradient";
 import { ThemeType } from "../../../styles/theme";
 import CheckMark from "../../../assets/svg/check-mark.svg";
 import ShieldCheckIcon from "../../../assets/svg/shield-check.svg";
+import { ChevronLeftIcon } from "../../../components/Icons/AppIcons";
+import { ROUTES } from "../../../constants/routes";
 import { RootState } from "../../../store";
 
 const SafeAreaContainer = styled(SafeAreaView)<{ theme: ThemeType }>`
   flex: 1;
   justify-content: flex-end;
+`;
+
+const BackButton = styled.TouchableOpacity<{ theme: ThemeType }>`
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background-color: ${(p) => p.theme.colors.cardBackground};
+  border: 1px solid ${(p) => p.theme.colors.border};
+  justify-content: center;
+  align-items: center;
 `;
 
 const ContentContainer = styled.View<{ theme: ThemeType }>`
@@ -77,7 +90,7 @@ export default function WalletCreationSuccessPage() {
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState("You're All Set!");
   const [subtitle, setSubtitle] = useState(
-    "Your new multichain wallet is ready. Let's start tracking and securing your assets."
+    "BitMarket is ready. Start exploring decentralized liquidity and swaps."
   );
 
   const chainId = useSelector((state: RootState) => state.ethereum.activeChainId);
@@ -85,9 +98,9 @@ export default function WalletCreationSuccessPage() {
 
   useEffect(() => {
     if (successState === "import") {
-      setTitle("Wallet Imported!");
+      setTitle("Account Ready!");
       setSubtitle(
-        "Your imported multichain wallet is ready. Let's start tracking and securing your assets."
+        "BitMarket is ready. Start exploring decentralized liquidity and swaps."
       );
     }
   }, [successState]);
@@ -105,6 +118,22 @@ export default function WalletCreationSuccessPage() {
   return (
     <LinearGradientBackground colors={theme.colors.primaryLinearGradient}>
       <SafeAreaContainer>
+        <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
+          <BackButton
+            activeOpacity={0.7}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace(ROUTES.unlock);
+              }
+            }}
+            hitSlop={12}
+          >
+            <ChevronLeftIcon size={20} color={theme.colors.white} strokeWidth={2.2} />
+          </BackButton>
+        </View>
+
         <ContentContainer>
           <HeroSection>
             <HaloContainer>

@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
-import { SafeAreaView, View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useTheme } from "styled-components/native";
 import { useDispatch, useSelector } from "react-redux";
@@ -15,7 +16,7 @@ import { ThemeType } from "../../../styles/theme";
 import { LinearGradientBackground } from "../../../components/Styles/Gradient";
 import { MotiView } from "moti";
 import FingerprintIcon from "../../../assets/svg/fingerprint.svg";
-import LeftArrow from "../../../assets/svg/left-arrow.svg";
+import { ChevronLeftIcon } from "../../../components/Icons/AppIcons";
 
 export default function BiometricsSetup() {
   const theme = useTheme() as ThemeType;
@@ -36,7 +37,6 @@ export default function BiometricsSetup() {
         // Auth succeeded — save the user's preference
         await dispatch(saveBiometricPreference(true));
         dispatch(unlockWallet());
-        router.dismissAll();
         router.replace(ROUTES.home);
       }
     } catch (e: any) {
@@ -51,7 +51,6 @@ export default function BiometricsSetup() {
   const handleSkip = useCallback(() => {
     // User opts out of biometrics — go straight to home
     dispatch(unlockWallet());
-    router.dismissAll();
     router.replace(ROUTES.home);
   }, [dispatch]);
 
@@ -61,8 +60,19 @@ export default function BiometricsSetup() {
     <LinearGradientBackground colors={theme.colors.primaryLinearGradient}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <LeftArrow color={theme.colors.white} width={24} height={24} />
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace(ROUTES.setPassword as any);
+              }
+            }}
+            style={styles.backButton}
+            hitSlop={12}
+          >
+            <ChevronLeftIcon size={20} color={theme.colors.white} strokeWidth={2.2} />
           </TouchableOpacity>
         </View>
 
@@ -103,11 +113,11 @@ export default function BiometricsSetup() {
             transition={{ type: "timing", duration: 800, delay: 300 }}
             style={styles.textContainer}
           >
-            <Text style={styles.title}>Secure With Biometrics</Text>
+            <Text style={styles.title}>Biometric Protection</Text>
             <Text style={styles.subtitle}>
               {biometricAvailable
-                ? "Use FaceID or TouchID for quick and secure access to your wallet. You can always change this in Settings."
-                : "Biometric authentication is not available on this device. You can use your password to unlock."}
+                ? "Use FaceID or TouchID for fast and secure access to BitMarket. You can always change this in Settings."
+                : "Biometric authentication is not available on this device. You can use your passcode to unlock."}
             </Text>
           </MotiView>
         </View>
@@ -176,8 +186,12 @@ function createStyles(theme: ThemeType) {
       paddingTop: 10,
     },
     backButton: {
-      width: 40,
-      height: 40,
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      backgroundColor: theme.colors.cardBackground,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -210,7 +224,7 @@ function createStyles(theme: ThemeType) {
       width: 140,
       height: 140,
       borderRadius: 70,
-      backgroundColor: "rgba(55, 114, 255, 0.12)",
+      backgroundColor: "rgba(139, 92, 246, 0.15)",
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 2,
