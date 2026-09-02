@@ -1,6 +1,5 @@
 import { FC, ReactNode } from "react";
 import styled from "styled-components/native";
-import { Redirect } from "expo-router";
 import { ThemeType } from "../../styles/theme";
 
 interface StyledComponentThemeProps {
@@ -13,19 +12,13 @@ const AppContainer = styled.View<StyledComponentThemeProps>`
 
 interface AnimatedSplashScreenProps {
   children: ReactNode;
-  appReady: boolean;
-  userExists: boolean;
+  appReady?: boolean;
+  userExists?: boolean;
 }
 
 const AnimatedSplashScreen: FC<AnimatedSplashScreenProps> = ({
   children,
-  appReady,
-  userExists,
 }) => {
-  if (!userExists && appReady) {
-    return <Redirect href="/(wallet)/setup/wallet-setup" />;
-  }
-
   return <AppContainer>{children}</AppContainer>;
 };
 

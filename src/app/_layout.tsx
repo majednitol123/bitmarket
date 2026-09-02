@@ -262,6 +262,8 @@ import {
 } from "@expo-google-fonts/roboto";
 import { lockWallet, UNLOCK_TIMEOUT, BACKGROUND_LOCK_TIMEOUT, loadBiometricPreference, checkBiometricAvailability } from "../store/biometricsSlice";
 import { store, persistor, RootState } from "../store";
+import { AppKitProvider } from "@reown/appkit-react-native";
+import { appKit } from "../config/AppKitConfig";
 import { DarkTheme, LightTheme } from "../styles/theme";
 import FloatingBackButton from "./FloatingBackButton";
 import * as Sentry from "@sentry/react-native";
@@ -453,7 +455,9 @@ function RootLayoutComponent() {
     <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
       <Provider store={store}>
         <PersistGate loading={null} persistor={persistor}>
-          <InnerApp />
+          <AppKitProvider instance={appKit}>
+            <InnerApp />
+          </AppKitProvider>
         </PersistGate>
       </Provider>
     </View>

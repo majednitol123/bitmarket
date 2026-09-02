@@ -102,7 +102,7 @@ export const DarkTheme: ThemeType = {
     border: "#2A2F3E",
     borderLight: "#3A3F4E",
     // Gradients
-    primaryLinearGradient: ["#0B0E14", "#151920"] as const,
+    primaryLinearGradient: ["#0B0E1A", "#0F1030", "#1A1050"] as const,
     secondaryLinearGradient: ["#1A1F2E", "#0B0E14"] as const,
     cardGradient: ["#1A1F2E", "#151920"] as const,
     headerGradient: ["rgba(11, 14, 20, 0.95)", "rgba(11, 14, 20, 0)"] as const,

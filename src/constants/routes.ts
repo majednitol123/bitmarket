@@ -11,7 +11,7 @@ export interface Routes {
 }
 
 export const ROUTES: Routes = {
-  home: "/",
+  home: "/(app)",
   unlock: "(wallet)/unlock",
 
   setPassword: "(wallet)/setup/set-password",

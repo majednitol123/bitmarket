@@ -15,7 +15,8 @@ import Header from "../../components/Header/Header";
 import SplashScreenOverlay from "../../components/AnimatedSplashScreen/AnimatedSplashScreen";
 import { ThemeType } from "../../styles/theme";
 import { ROUTES } from "../../constants/routes";
-import { Alert, Platform } from "react-native";
+import { Alert, Platform, View } from "react-native";
+import { AppKit } from "@reown/appkit-react-native";
 
 const IconTouchContainer = styled.TouchableOpacity`
   padding: 10px;
@@ -37,49 +38,29 @@ export default function AppLayout() {
       state.ethereum.activeIndex ?? 0
   );
 
-  const ethAccounts = useSelector(
-    (state: RootState) => state.ethereum.globalAddresses || []
-  );
-
-  const ethAddress = ethAccounts[activeIndex]?.address ?? "";
   const [appReady, setAppReady] = useState<boolean>(false);
-  const [userExists, setUserExists] = useState<boolean>(false);
-  const walletsExist = ethAddress !== "";
 
-useEffect(() => {
-  const prepare = async () => {
-    try {
-      // No wallets? clean up
-      if (!walletsExist) {
-        clearPersistedState();
-        setUserExists(false);
-        return;
+  useEffect(() => {
+    const prepare = async () => {
+      try {
+        // Check if wallet is locked — root _layout handles all lock/unlock state.
+        // We only redirect here if the wallet is currently locked.
+        const { passwordSet, unlocked } = store.getState().biometrics;
+        if (passwordSet && !unlocked) {
+          router.replace(ROUTES.unlock);
+        }
+      } catch (err) {
+        console.error("Error in app prepare:", err);
+        Alert.alert("Error", `Something went wrong: ${err instanceof Error ? err.message : err}`);
+      } finally {
+        setAppReady(true);
+        await SplashScreen.hideAsync();
       }
-      // Wallet exists
-      setUserExists(true);
+    };
 
-      // Check if wallet is locked — root _layout handles all lock/unlock state.
-      // We only redirect here if the wallet is currently locked.
-      const { passwordSet, unlocked } = store.getState().biometrics;
-      if (passwordSet && !unlocked) {
-        router.replace(ROUTES.unlock);
-      }
-
-    } catch (err) {
-      console.error("Error in app prepare:", err);
-      Alert.alert("Error", `Something went wrong: ${err instanceof Error ? err.message : err}`);
-    } finally {
-      setAppReady(true);
-      await SplashScreen.hideAsync();
-    }
-  };
-
-  SystemUI.setBackgroundColorAsync(theme.colors.background);
-  prepare();
-
-  // NOTE: Auto-lock AppState listener is in root _layout.tsx InnerApp.
-  // Do NOT add a duplicate here — it causes conflicting lock behavior.
-}, [walletsExist]);
+    SystemUI.setBackgroundColorAsync(theme.colors.background);
+    prepare();
+  }, []);
 
   // ─── REACTIVE LOCK NAVIGATION ───
   // When auto-lock fires (timeout or background return), Redux sets unlocked=false.
@@ -116,7 +97,6 @@ const onLayoutRootView = useCallback(async () => {
   return (
     <LinearGradientBackground colors={theme.colors.primaryLinearGradient} onLayout={onLayoutRootView}>
       <SplashScreenOverlay
-        userExists={userExists}
         appReady={appReady}
       >
         <Stack
@@ -148,6 +128,9 @@ const onLayoutRootView = useCallback(async () => {
           />
          </Stack>
         <Toast position="top" topOffset={75} config={toastConfig} />
+        <View style={{ position: 'absolute', height: '100%', width: '100%' }}>
+          <AppKit />
+        </View>
       </SplashScreenOverlay>
     </LinearGradientBackground>
   );
