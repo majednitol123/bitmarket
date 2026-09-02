@@ -10,6 +10,7 @@ import {
   Modal,
   TouchableWithoutFeedback,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "styled-components/native";
 import { useDispatch, useSelector } from "react-redux";
@@ -156,21 +157,28 @@ export function SwapSettingsBottomSheet(props: SwapSettingsBottomSheetProps) {
               ))}
             </View>
 
-            {/* Custom Slippage Input */}
-            <View style={styles.customSlippageRow}>
-              <TextInput
-                style={styles.customSlippageInput}
-                value={customSlippage}
-                onChangeText={(text) => {
-                  handleSetCustomSlippage(text);
-                  if (text) handleSetSlippageAuto(false);
-                }}
-                placeholder="Custom"
-                placeholderTextColor={theme.colors.grey}
-                keyboardType="decimal-pad"
-              />
-              <Text style={styles.customSlippagePercent}>%</Text>
-            </View>
+            {/* Custom Slippage Input with Gradient Border */}
+            <LinearGradient
+              colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.customSlippageGradient}
+            >
+              <View style={styles.customSlippageRow}>
+                <TextInput
+                  style={styles.customSlippageInput}
+                  value={customSlippage}
+                  onChangeText={(text) => {
+                    handleSetCustomSlippage(text);
+                    if (text) handleSetSlippageAuto(false);
+                  }}
+                  placeholder="Custom"
+                  placeholderTextColor={theme.colors.grey}
+                  keyboardType="decimal-pad"
+                />
+                <Text style={styles.customSlippagePercent}>%</Text>
+              </View>
+            </LinearGradient>
 
             {/* Auto (Recommended) Checkbox */}
             <TouchableOpacity
@@ -240,7 +248,7 @@ export function SwapSettingsBottomSheet(props: SwapSettingsBottomSheetProps) {
                 onValueChange={handleSetExpertMode}
                 trackColor={{
                   false: theme.colors.border,
-                  true: "#3772FF",
+                  true: theme.colors.primary,
                 }}
                 thumbColor="#FFFFFF"
               />
@@ -249,11 +257,18 @@ export function SwapSettingsBottomSheet(props: SwapSettingsBottomSheetProps) {
 
           {/* ─── Bottom Done Button ─── */}
           <TouchableOpacity
-            style={styles.doneButton}
+            style={styles.doneButtonWrapper}
             activeOpacity={0.85}
             onPress={props.onDismiss}
           >
-            <Text style={styles.doneButtonText}>Done</Text>
+            <LinearGradient
+              colors={theme.colors.buttonGradient || (["#3772FF", "#9B59B6"] as const)}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.doneGradient}
+            >
+              <Text style={styles.doneButtonText}>Done</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </View>
@@ -344,8 +359,8 @@ function createStyles(theme: ThemeType) {
       alignItems: "center",
     },
     optionButtonActive: {
-      backgroundColor: "#3772FF",
-      borderColor: "#3772FF",
+      backgroundColor: theme.colors.primary,
+      borderColor: theme.colors.primary,
     },
     optionButtonText: {
       color: theme.colors.white,
@@ -355,16 +370,18 @@ function createStyles(theme: ThemeType) {
     optionButtonTextActive: {
       color: "#FFFFFF",
     },
+    customSlippageGradient: {
+      borderRadius: 12,
+      padding: 1.5,
+      marginBottom: 12,
+    },
     customSlippageRow: {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: theme.colors.dark,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
+      borderRadius: 10.5,
       paddingHorizontal: 14,
-      marginBottom: 12,
-      height: 44,
+      height: 42,
     },
     customSlippageInput: {
       flex: 1,
@@ -394,8 +411,8 @@ function createStyles(theme: ThemeType) {
       marginRight: 10,
     },
     checkboxActive: {
-      backgroundColor: "#3772FF",
-      borderColor: "#3772FF",
+      backgroundColor: theme.colors.primary,
+      borderColor: theme.colors.primary,
     },
     checkboxCheck: {
       color: "#FFFFFF",
@@ -420,13 +437,15 @@ function createStyles(theme: ThemeType) {
       fontSize: 12,
       marginTop: 2,
     },
-    doneButton: {
-      backgroundColor: "#3772FF",
-      borderRadius: 14,
+    doneButtonWrapper: {
+      borderRadius: 16,
+      overflow: "hidden",
+      marginTop: 16,
+    },
+    doneGradient: {
       paddingVertical: 15,
       alignItems: "center",
       justifyContent: "center",
-      marginTop: 16,
     },
     doneButtonText: {
       color: "#FFFFFF",

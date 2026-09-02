@@ -16,6 +16,7 @@ import {
   type Chain,
   type Token,
 } from "../constants/tokenRegistry";
+import { notifyChainChanged, notifySwapReady } from "../services/notificationService";
 
 // ═══════════════════════════════════════════════════════════
 // SWAP SETTINGS
@@ -108,6 +109,7 @@ export function useSwapState() {
         setSelectedTokenTo(null);
       }
       setChainModalVisible(false);
+      notifyChainChanged(chain.name);
     },
     [chainModalTarget]
   );
@@ -157,6 +159,10 @@ export function useSwapState() {
     setSelectedChainTo(tempChain);
     setSelectedTokenTo(tempToken);
     setToAmount(tempAmount);
+
+    if (selectedTokenTo && selectedTokenFrom) {
+      notifySwapReady(selectedTokenTo.symbol, selectedTokenFrom.symbol, toAmount || fromAmount);
+    }
   }, [
     selectedChainFrom,
     selectedChainTo,

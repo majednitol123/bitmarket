@@ -65,5 +65,16 @@ target 'BitMarket' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
+
+    # Ensure ExpoModulesJSI.framework is embedded into the app bundle
+    frameworks_script = File.join(installer.sandbox.target_support_files_root, 'Pods-BitMarket', 'Pods-BitMarket-frameworks.sh')
+    if File.exist?(frameworks_script)
+      content = File.read(frameworks_script)
+      unless content.include?('ExpoModulesJSI/ExpoModulesJSI.framework')
+        jsi_line = '  install_framework "${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoModulesJSI/ExpoModulesJSI.framework"'
+        updated_content = content.gsub('install_framework "${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoModulesCore/ExpoModulesCore.framework"', "#{jsi_line}\n  install_framework \"${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoModulesCore/ExpoModulesCore.framework\"")
+        File.write(frameworks_script, updated_content)
+      end
+    end
   end
 end

@@ -24,6 +24,7 @@ export type ThemeType = {
     secondaryLinearGradient: readonly [string, string, ...string[]];
     cardGradient: readonly [string, string, ...string[]];
     headerGradient: readonly [string, string, ...string[]];
+    buttonGradient: readonly [string, string, ...string[]];
     gold: string;
     blue: string;
     darkText: string;
@@ -78,18 +79,18 @@ export type ThemeType = {
 
 export const DarkTheme: ThemeType = {
   colors: {
-    // Premium dark crypto palette (Electric Blue + Deep Purple)
-    primary: "#3772FF",          // Electric blue - primary accent
-    primaryLight: "#5B8DFF",     // Lighter blue
-    gold: "#3772FF",
-    blue: "#3772FF",             // Electric blue accent
+    // Premium dark crypto palette (Vibrant Purple & Deep Violet)
+    primary: "#8B5CF6",          // Vibrant purple - primary accent
+    primaryLight: "#A78BFA",     // Soft purple
+    gold: "#8B5CF6",
+    blue: "#8B5CF6",             // Purple accent
     dark: "#0B0E1A",             // Deep navy black background
     darker: "#070913",           // Even darker
     lightDark: "#121526",        // Card/surface background
     cardBackground: "#161B2E",   // Sleek dark card bg
-    accent: "#8B5CF6",           // Vibrant purple accent
+    accent: "#A855F7",           // Radiant purple accent
     background: "#0B0E1A",
-    highlight: "#8B5CF6",
+    highlight: "#A855F7",
     white: "#FFFFFF",
     offWhite: "#F5F5F5",
     lightGrey: "#8A8F9E",        // Secondary text
@@ -106,6 +107,7 @@ export const DarkTheme: ThemeType = {
     secondaryLinearGradient: ["#161B2E", "#0B0E1A"] as const,
     cardGradient: ["#161B2E", "#121526"] as const,
     headerGradient: ["rgba(11, 14, 26, 0.95)", "rgba(11, 14, 26, 0)"] as const,
+    buttonGradient: ["#7C3AED", "#A855F7"] as const,
     darkText: "#FFFFFF",
     realWhite: "#FFFFFF",
     black: "#000000",
@@ -134,9 +136,9 @@ export const DarkTheme: ThemeType = {
     colors: {
       primary: "#FFFFFF",
       dark: "#0B0E1A",
-      accent: "#3772FF",
+      accent: "#8B5CF6",
       background: "#0B0E1A",
-      highlight: "#8B5CF6",
+      highlight: "#A855F7",
     },
   },
   spacing: {
@@ -158,15 +160,15 @@ export const DarkTheme: ThemeType = {
 
 export const LightTheme: ThemeType = {
   colors: {
-    // Premium light crypto palette (Glassmorphism concept with Blue & Purple)
-    primary: "#3772FF",          // Blue brand color
-    primaryLight: "#5B8DFF",
-    gold: "#3772FF",
-    blue: "#3772FF",             // Vibrant electric blue
+    // Premium light crypto palette (Royal Purple & Violet)
+    primary: "#7C3AED",          // Rich royal purple
+    primaryLight: "#8B5CF6",
+    gold: "#7C3AED",
+    blue: "#7C3AED",
     dark: "#F4F6FA",             // Light cool-grey app background
     darker: "#E8ECF4",           // Subtle background overlay
     lightDark: "#FFFFFF",        // Opaque white container background
-    cardBackground: "rgba(255, 255, 255, 0.75)", // High blur glassmorphic card bg
+    cardBackground: "#FFFFFF",   // Solid opaque white card bg
     accent: "#8B5CF6",
     background: "#F4F6FA",
     highlight: "#8B5CF6",
@@ -186,6 +188,7 @@ export const LightTheme: ThemeType = {
     secondaryLinearGradient: ["#FFFFFF", "#F4F6FA"] as const,
     cardGradient: ["#FFFFFF", "#F8FAFC"] as const,
     headerGradient: ["rgba(244, 246, 250, 0.95)", "rgba(244, 246, 250, 0)"] as const,
+    buttonGradient: ["#7C3AED", "#A855F7"] as const,
     darkText: "#FFFFFF",
     realWhite: "#FFFFFF",
     black: "#000000",
@@ -214,7 +217,7 @@ export const LightTheme: ThemeType = {
     colors: {
       primary: "#0B0E1A",        // Text in buttons defaults to dark slate
       dark: "#0B0E1A",
-      accent: "#3772FF",
+      accent: "#7C3AED",
       background: "#F4F6FA",
       highlight: "#8B5CF6",
     },
@@ -235,6 +238,3 @@ export const LightTheme: ThemeType = {
     pill: "999px",
   },
 };
-
-const Theme = DarkTheme;
-export default Theme;

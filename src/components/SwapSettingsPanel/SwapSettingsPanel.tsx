@@ -208,7 +208,7 @@ export function SwapSettingsPanel(props: SwapSettingsPanelProps) {
           onValueChange={handleSetExpertMode}
           trackColor={{
             false: theme.colors.border,
-            true: "#3772FF",
+            true: theme.colors.primary,
           }}
           thumbColor="#FFFFFF"
         />
@@ -287,8 +287,8 @@ function createStyles(theme: ThemeType) {
       alignItems: "center",
     },
     optionButtonActive: {
-      backgroundColor: "#3772FF",
-      borderColor: "#3772FF",
+      backgroundColor: theme.colors.primary,
+      borderColor: theme.colors.primary,
     },
     optionButtonText: {
       color: theme.colors.white,
@@ -337,8 +337,8 @@ function createStyles(theme: ThemeType) {
       marginRight: 10,
     },
     checkboxActive: {
-      backgroundColor: "#3772FF",
-      borderColor: "#3772FF",
+      backgroundColor: theme.colors.primary,
+      borderColor: theme.colors.primary,
     },
     checkboxCheck: {
       color: "#FFFFFF",

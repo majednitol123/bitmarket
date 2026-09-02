@@ -9,8 +9,10 @@ import { Switch, Alert, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradientBackground } from "../../../components/Styles/Gradient";
 import Svg, { Path, Circle } from "react-native-svg";
-import { setThemeMode, ThemeMode } from "../../../store/settingsSlice";
+import { setThemeMode, ThemeMode, setNotificationsEnabled } from "../../../store/settingsSlice";
 import * as LocalAuthentication from "expo-local-authentication";
+import * as Notifications from "expo-notifications";
+import { notifyNotificationsToggled } from "../../../services/notificationService";
 import FingerprintIcon from "../../../assets/svg/edit.svg";
 
 const ScrollContainer = styled.ScrollView`
@@ -41,7 +43,7 @@ const IconCircle = styled.View<{ theme: ThemeType }>`
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background-color: rgba(55, 114, 255, 0.12);
+  background-color: rgba(124, 58, 237, 0.15);
   margin-right: 14px;
 `;
 
@@ -68,7 +70,7 @@ const InstructionText = styled.Text<{ theme: ThemeType }>`
   line-height: 18px;
 `;
 
-const BiometricOptionCard = styled.TouchableOpacity<{ theme: ThemeType }>`
+const SettingOptionCard = styled.TouchableOpacity<{ theme: ThemeType }>`
   background-color: ${(props) => props.theme.colors.cardBackground};
   padding: 16px;
   border-radius: 14px;
@@ -143,6 +145,13 @@ const SystemIcon = ({ color }: { color: string }) => (
   </Svg>
 );
 
+const BellIcon = ({ color }: { color: string }) => (
+  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+    <Path d="M13.73 21a2 2 0 0 1-3.46 0" />
+  </Svg>
+);
+
 const SettingsIndex = () => {
   const theme = useTheme();
   const dispatch = useDispatch<AppDispatch>();
@@ -153,6 +162,9 @@ const SettingsIndex = () => {
 
   const [bioEnabled, setBioEnabled] = useState(biometricPreference);
   const themeMode = useSelector((state: RootState) => state.settings?.themeMode ?? "system");
+  const notificationsEnabled = useSelector(
+    (state: RootState) => state.settings?.notificationsEnabled ?? true
+  );
 
   useEffect(() => {
     dispatch(checkBiometricAvailability());
@@ -164,6 +176,42 @@ const SettingsIndex = () => {
 
   const handleSelectTheme = (mode: ThemeMode) => {
     dispatch(setThemeMode(mode));
+  };
+
+  const handleToggleNotifications = async (val: boolean) => {
+    if (val) {
+      try {
+        const { status: existingStatus } = await Notifications.getPermissionsAsync();
+        let finalStatus = existingStatus;
+
+        if (existingStatus !== "granted") {
+          const { status } = await Notifications.requestPermissionsAsync({
+            ios: {
+              allowAlert: true,
+              allowBadge: true,
+              allowSound: true,
+              allowProvisional: true,
+            },
+          });
+          finalStatus = status;
+        }
+
+        if (finalStatus !== "granted") {
+          Alert.alert(
+            "Notifications Disabled",
+            "Notification permissions are not enabled for BitMarket in your device settings. Please enable notifications in system settings to receive activity alerts."
+          );
+          return;
+        }
+
+        dispatch(setNotificationsEnabled(true));
+        notifyNotificationsToggled(true);
+      } catch (err) {
+        dispatch(setNotificationsEnabled(true));
+      }
+    } else {
+      dispatch(setNotificationsEnabled(false));
+    }
   };
 
   const handleToggleBiometrics = async (val: boolean) => {
@@ -217,10 +265,41 @@ const SettingsIndex = () => {
       <SafeAreaContainer edges={["bottom", "left", "right"]}>
         <ScrollContainer showsVerticalScrollIndicator={false}>
           <ContentContainer style={{ paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }}>
+            {/* Notifications Group */}
+            <SettingsGroup>
+              <GroupTitle>Notifications</GroupTitle>
+              <SettingOptionCard
+                activeOpacity={0.7}
+                onPress={() => handleToggleNotifications(!notificationsEnabled)}
+              >
+                <OptionRow>
+                  <OptionLeft>
+                    <IconCircle>
+                      <BellIcon color={theme.colors.primary} />
+                    </IconCircle>
+                    <View style={{ flex: 1 }}>
+                      <OptionText>Activity Notifications</OptionText>
+                      <OptionSubtext>
+                        {notificationsEnabled
+                          ? "Wallet events & swap activity alerts enabled"
+                          : "Activity notifications are turned off"}
+                      </OptionSubtext>
+                    </View>
+                  </OptionLeft>
+                  <Switch
+                    value={notificationsEnabled}
+                    onValueChange={handleToggleNotifications}
+                    thumbColor={notificationsEnabled ? theme.colors.primary : theme.colors.lightGrey}
+                    trackColor={{ false: theme.colors.grey, true: theme.colors.primaryLight }}
+                  />
+                </OptionRow>
+              </SettingOptionCard>
+            </SettingsGroup>
+
             {/* Security Group */}
             <SettingsGroup>
               <GroupTitle>Security</GroupTitle>
-              <BiometricOptionCard
+              <SettingOptionCard
                 activeOpacity={0.7}
                 onPress={() => handleToggleBiometrics(!bioEnabled)}
               >
@@ -251,9 +330,10 @@ const SettingsIndex = () => {
                     </InstructionText>
                   </>
                 )}
-              </BiometricOptionCard>
+              </SettingOptionCard>
             </SettingsGroup>
 
+            {/* Appearance Group */}
             <SettingsGroup>
               <GroupTitle>Appearance</GroupTitle>
               <ThemeSelectorContainer>

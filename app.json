@@ -1,19 +1,19 @@
 {
   "expo": {
     "name": "BitMarket",
-    "slug": "rn-crypto-wallet",
+    "slug": "bitmarket",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "automatic",
-    "scheme": "rn-crypto-wallet",
+    "scheme": "bitmarket",
 
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.rncryptowallet"
+      "bundleIdentifier": "com.bitmarket.app"
     },
     "android": {
 
@@ -27,7 +27,7 @@
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT"
       ],
-      "package": "com.anonymous.rncryptowallet"
+      "package": "com.bitmarket.app"
     },
     "plugins": [
       "expo-router",

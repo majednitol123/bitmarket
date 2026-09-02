@@ -1,6 +1,7 @@
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import { Platform } from "react-native";
+import { store } from "../store";
 
 // ─── Configure notification handler (how notifications are displayed when app is in foreground) ───
 Notifications.setNotificationHandler({
@@ -12,6 +13,16 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
+
+// ─── Check if notifications are globally enabled in Redux settings ───
+export function areNotificationsEnabled(): boolean {
+  try {
+    const state = store.getState();
+    return state.settings?.notificationsEnabled ?? true;
+  } catch (e) {
+    return true;
+  }
+}
 
 // ─── Register for push notifications and get the Expo Push Token ───
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
@@ -55,7 +66,6 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   }
 
   // Also get the native device push token (APNs for iOS, FCM for Android)
-  // This is useful when you implement your own backend push service
   try {
     const deviceToken = await Notifications.getDevicePushTokenAsync();
     if (__DEV__) console.log("[Notifications] Native Device Token:", deviceToken.data);
@@ -69,19 +79,24 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       name: "Wallet Notifications",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#3772FF",
+      lightColor: "#8B5CF6",
     });
   }
 
   return token;
 }
 
-// ─── Send a local notification (for testing) ───
+// ─── Send a local notification (checks user setting) ───
 export async function sendLocalNotification(
   title: string,
   body: string,
   data?: Record<string, unknown>
 ): Promise<void> {
+  if (!areNotificationsEnabled()) {
+    if (__DEV__) console.log("[Notifications] Notifications turned off in Settings. Skipping:", title);
+    return;
+  }
+
   await Notifications.scheduleNotificationAsync({
     content: {
       title,
@@ -93,7 +108,8 @@ export async function sendLocalNotification(
   });
 }
 
-// ─── Wallet-specific notification helpers ───
+// ─── Activity Notification Helpers ───
+
 export async function notifyWalletConnected(address: string): Promise<void> {
   const shortAddr = `${address.slice(0, 6)}...${address.slice(-4)}`;
   await sendLocalNotification(
@@ -117,8 +133,43 @@ export async function notifySwapReady(
   amount: string
 ): Promise<void> {
   await sendLocalNotification(
-    "🔄 Swap Ready",
-    `Ready to swap ${amount} ${fromToken} → ${toToken}`,
+    "🔄 Swap Direction Updated",
+    `Ready to swap ${amount || "0"} ${fromToken} → ${toToken}`,
     { type: "swap_ready", fromToken, toToken, amount }
   );
+}
+
+export async function notifySwapExecuted(
+  fromToken: string,
+  toToken: string,
+  fromAmount: string,
+  toAmount: string
+): Promise<void> {
+  await sendLocalNotification(
+    "⚡ Swap Executed",
+    `Successfully swapped ${fromAmount} ${fromToken} for ${toAmount} ${toToken}`,
+    { type: "swap_executed", fromToken, toToken, fromAmount, toAmount }
+  );
+}
+
+export async function notifyChainChanged(chainName: string): Promise<void> {
+  await sendLocalNotification(
+    "🌐 Network Switched",
+    `Active blockchain switched to ${chainName}`,
+    { type: "chain_changed", chainName }
+  );
+}
+
+export async function notifyNotificationsToggled(enabled: boolean): Promise<void> {
+  if (enabled) {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "🔔 Notifications Enabled",
+        body: "You will now receive activity alerts for wallet connections, token swaps, and trade execution.",
+        data: { type: "settings_update" },
+        sound: true,
+      },
+      trigger: null,
+    });
+  }
 }

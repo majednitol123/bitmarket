@@ -89,45 +89,52 @@ export default function Index() {
 
           {/* ─── From Field ─── */}
           <Text style={styles.fieldLabel}>From</Text>
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.amountInput}
-              value={swap.fromAmount}
-              onChangeText={swap.setFromAmount}
-              placeholder="0.0"
-              placeholderTextColor={theme.colors.grey}
-              keyboardType="decimal-pad"
-            />
-            <TouchableOpacity
-              style={styles.tokenSelector}
-              onPress={() => swap.openTokenModal("from")}
-            >
-              {swap.selectedTokenFrom ? (
-                <View style={styles.tokenSelectorInner}>
-                  <BlockchainIcon
-                    symbol={swap.selectedTokenFrom.symbol}
-                    size={24}
-                    logoUrl={swap.selectedTokenFrom.icon}
-                  />
-                  <Text style={styles.tokenSelectorText}>
-                    {swap.selectedTokenFrom.symbol}
-                  </Text>
-                  <Text style={styles.chevron}>›</Text>
-                </View>
-              ) : (
-                <View style={styles.tokenSelectorInner}>
-                  <View style={styles.plusCircle}>
-                    <Text style={styles.plusText}>+</Text>
+          <LinearGradient
+            colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.inputGradientBorder}
+          >
+            <View style={styles.inputRow}>
+              <TextInput
+                style={styles.amountInput}
+                value={swap.fromAmount}
+                onChangeText={swap.setFromAmount}
+                placeholder="0.0"
+                placeholderTextColor={theme.colors.grey}
+                keyboardType="decimal-pad"
+              />
+              <TouchableOpacity
+                style={styles.tokenSelector}
+                onPress={() => swap.openTokenModal("from")}
+              >
+                {swap.selectedTokenFrom ? (
+                  <View style={styles.tokenSelectorInner}>
+                    <BlockchainIcon
+                      symbol={swap.selectedTokenFrom.symbol}
+                      size={24}
+                      logoUrl={swap.selectedTokenFrom.icon}
+                    />
+                    <Text style={styles.tokenSelectorText}>
+                      {swap.selectedTokenFrom.symbol}
+                    </Text>
+                    <Text style={styles.chevron}>›</Text>
                   </View>
-                  <View>
-                    <Text style={styles.selectTokenText}>Select</Text>
-                    <Text style={styles.selectTokenText}>token</Text>
+                ) : (
+                  <View style={styles.tokenSelectorInner}>
+                    <View style={styles.plusCircle}>
+                      <Text style={styles.plusText}>+</Text>
+                    </View>
+                    <View>
+                      <Text style={styles.selectTokenText}>Select</Text>
+                      <Text style={styles.selectTokenText}>token</Text>
+                    </View>
+                    <Text style={styles.chevron}>›</Text>
                   </View>
-                  <Text style={styles.chevron}>›</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
+                )}
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
 
           {/* ─── Swap Button ─── */}
           <View style={styles.swapButtonRow}>
@@ -149,45 +156,52 @@ export default function Index() {
 
           {/* ─── To Field ─── */}
           <Text style={styles.fieldLabel}>To</Text>
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.amountInput}
-              value={swap.toAmount}
-              onChangeText={swap.setToAmount}
-              placeholder="0.0"
-              placeholderTextColor={theme.colors.grey}
-              keyboardType="decimal-pad"
-            />
-            <TouchableOpacity
-              style={styles.tokenSelector}
-              onPress={() => swap.openTokenModal("to")}
-            >
-              {swap.selectedTokenTo ? (
-                <View style={styles.tokenSelectorInner}>
-                  <BlockchainIcon
-                    symbol={swap.selectedTokenTo.symbol}
-                    size={24}
-                    logoUrl={swap.selectedTokenTo.icon}
-                  />
-                  <Text style={styles.tokenSelectorText}>
-                    {swap.selectedTokenTo.symbol}
-                  </Text>
-                  <Text style={styles.chevron}>›</Text>
-                </View>
-              ) : (
-                <View style={styles.tokenSelectorInner}>
-                  <View style={styles.plusCircle}>
-                    <Text style={styles.plusText}>+</Text>
+          <LinearGradient
+            colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.inputGradientBorder}
+          >
+            <View style={styles.inputRow}>
+              <TextInput
+                style={styles.amountInput}
+                value={swap.toAmount}
+                onChangeText={swap.setToAmount}
+                placeholder="0.0"
+                placeholderTextColor={theme.colors.grey}
+                keyboardType="decimal-pad"
+              />
+              <TouchableOpacity
+                style={styles.tokenSelector}
+                onPress={() => swap.openTokenModal("to")}
+              >
+                {swap.selectedTokenTo ? (
+                  <View style={styles.tokenSelectorInner}>
+                    <BlockchainIcon
+                      symbol={swap.selectedTokenTo.symbol}
+                      size={24}
+                      logoUrl={swap.selectedTokenTo.icon}
+                    />
+                    <Text style={styles.tokenSelectorText}>
+                      {swap.selectedTokenTo.symbol}
+                    </Text>
+                    <Text style={styles.chevron}>›</Text>
                   </View>
-                  <View>
-                    <Text style={styles.selectTokenText}>Select</Text>
-                    <Text style={styles.selectTokenText}>token</Text>
+                ) : (
+                  <View style={styles.tokenSelectorInner}>
+                    <View style={styles.plusCircle}>
+                      <Text style={styles.plusText}>+</Text>
+                    </View>
+                    <View>
+                      <Text style={styles.selectTokenText}>Select</Text>
+                      <Text style={styles.selectTokenText}>token</Text>
+                    </View>
+                    <Text style={styles.chevron}>›</Text>
                   </View>
-                  <Text style={styles.chevron}>›</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
+                )}
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
 
           {/* ─── Connect Wallet Button ─── */}
           <TouchableOpacity
@@ -196,7 +210,7 @@ export default function Index() {
             style={styles.connectButtonWrapper}
           >
             <LinearGradient
-              colors={["#3772FF", "#9B59B6"] as const}
+              colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.connectGradient}
@@ -291,13 +305,13 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       marginRight: 6,
     },
     networkBadge: {
-      backgroundColor: "rgba(55, 114, 255, 0.15)",
+      backgroundColor: "rgba(139, 92, 246, 0.15)",
       paddingHorizontal: 10,
       paddingVertical: 3,
       borderRadius: 6,
     },
     networkBadgeText: {
-      color: "#5B8DFF",
+      color: theme.colors.primary,
       fontFamily: theme.fonts.families.openBold,
       fontSize: 11,
     },
@@ -320,16 +334,18 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       marginBottom: 8,
       marginLeft: 2,
     },
+    inputGradientBorder: {
+      borderRadius: 16,
+      padding: 1.5,
+      marginBottom: 4,
+    },
     inputRow: {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: theme.colors.dark,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
+      borderRadius: 14.5,
       paddingHorizontal: 16,
       paddingVertical: 14,
-      marginBottom: 4,
     },
     amountInput: {
       flex: 1,

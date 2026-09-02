@@ -9,6 +9,7 @@ export interface SettingsState {
   slippageAuto: boolean;
   deadline: string;
   expertMode: boolean;
+  notificationsEnabled: boolean;
 }
 
 const initialState: SettingsState = {
@@ -18,6 +19,7 @@ const initialState: SettingsState = {
   slippageAuto: true,
   deadline: "20",
   expertMode: false,
+  notificationsEnabled: true,
 };
 
 const settingsSlice = createSlice({
@@ -42,6 +44,9 @@ const settingsSlice = createSlice({
     setExpertMode(state, action: PayloadAction<boolean>) {
       state.expertMode = action.payload;
     },
+    setNotificationsEnabled(state, action: PayloadAction<boolean>) {
+      state.notificationsEnabled = action.payload;
+    },
   },
 });
 
@@ -52,6 +57,7 @@ export const {
   setSlippageAuto,
   setDeadline,
   setExpertMode,
+  setNotificationsEnabled,
 } = settingsSlice.actions;
 
 export default settingsSlice.reducer;

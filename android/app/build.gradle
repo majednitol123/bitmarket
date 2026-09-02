@@ -83,6 +83,10 @@ def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 apply from: new File(["node", "--print", "require('path').dirname(require.resolve('@sentry/react-native/package.json'))"].execute().text.trim(), "sentry.gradle")
 
+if (System.getenv("SENTRY_AUTH_TOKEN") == null || System.getenv("SENTRY_AUTH_TOKEN").isEmpty()) {
+    project.ext.shouldSentryAutoUploadGeneral = { -> return false }
+}
+
 android {
     ndkVersion rootProject.ext.ndkVersion
 
@@ -91,7 +95,7 @@ android {
 
     namespace 'com.anonymous.rncryptowallet'
     defaultConfig {
-        applicationId 'com.anonymous.rncryptowallet'
+        applicationId 'com.bitmarket.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

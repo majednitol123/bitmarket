@@ -89,7 +89,7 @@ export const appKit = createAppKit({
     url: "https://bitmarket.app",
     icons: ["https://bitmarket.app/icon.png"],
     redirect: {
-      native: "rn-crypto-wallet://",
+      native: "bitmarket://",
     },
   },
 });

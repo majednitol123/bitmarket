@@ -91,4 +91,21 @@ function fixSplash() {
   }
 }
 
+function fixFrameworks() {
+  const frameworksScript = path.join(__dirname, "../ios/Pods/Target Support Files/Pods-BitMarket/Pods-BitMarket-frameworks.sh");
+  if (!fs.existsSync(frameworksScript)) return;
+
+  let content = fs.readFileSync(frameworksScript, "utf8");
+  if (!content.includes("ExpoModulesJSI/ExpoModulesJSI.framework")) {
+    const jsiLine = '  install_framework "${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoModulesJSI/ExpoModulesJSI.framework"';
+    content = content.replace(
+      /install_framework "\$\{PODS_XCFRAMEWORKS_BUILD_DIR\}\/ExpoModulesCore\/ExpoModulesCore\.framework"/g,
+      `${jsiLine}\n  install_framework "\${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoModulesCore/ExpoModulesCore.framework"`
+    );
+    fs.writeFileSync(frameworksScript, content, "utf8");
+    console.log("[+] Added ExpoModulesJSI to Pods-BitMarket-frameworks.sh.");
+  }
+}
+
 fixSplash();
+fixFrameworks();

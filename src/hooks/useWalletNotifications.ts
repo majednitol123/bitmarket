@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import { useSelector } from "react-redux";
+import { RootState } from "../store";
 import { useAccount } from "@reown/appkit-react-native";
 import {
   registerForPushNotificationsAsync,
@@ -10,13 +12,16 @@ import * as Notifications from "expo-notifications";
 /**
  * Hook to manage push notification lifecycle:
  * - Registers for push notifications on mount
- * - Fires a local notification when wallet connects/disconnects
+ * - Fires a local notification when wallet connects/disconnects (if notifications enabled)
  * - Sets up notification response listener (tap handler)
  */
 export function useWalletNotifications() {
   const { address, isConnected } = useAccount();
   const prevConnected = useRef<boolean>(false);
   const pushTokenRef = useRef<string | null>(null);
+  const notificationsEnabled = useSelector(
+    (state: RootState) => state.settings?.notificationsEnabled ?? true
+  );
 
   // ─── Register for push notifications on mount ───
   useEffect(() => {
@@ -34,8 +39,6 @@ export function useWalletNotifications() {
         if (__DEV__) {
           console.log("[useWalletNotifications] Notification tapped:", data);
         }
-        // TODO: Navigate to relevant screen based on notification type
-        // e.g. if (data.type === "swap_ready") router.push("/swap-details");
       }
     );
 
@@ -60,14 +63,14 @@ export function useWalletNotifications() {
     prevConnected.current = isConnected;
 
     // Skip the first render (don't fire on initial mount)
-    if (wasConnected === false && isConnected && address) {
+    if (wasConnected === false && isConnected && address && notificationsEnabled) {
       // Wallet just connected
       notifyWalletConnected(address);
-    } else if (wasConnected === true && !isConnected) {
+    } else if (wasConnected === true && !isConnected && notificationsEnabled) {
       // Wallet just disconnected
       notifyWalletDisconnected();
     }
-  }, [isConnected, address]);
+  }, [isConnected, address, notificationsEnabled]);
 
   return {
     pushToken: pushTokenRef.current,

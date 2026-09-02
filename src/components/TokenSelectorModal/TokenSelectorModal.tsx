@@ -8,6 +8,7 @@ import {
   FlatList,
   StyleSheet,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "styled-components/native";
 import type { ThemeType } from "../../styles/theme";
 import { BlockchainIcon } from "../BlockchainIcon/BlockchainIcon";
@@ -117,17 +118,24 @@ export function TokenSelectorModal({
             </TouchableOpacity>
           </View>
 
-          {/* Search Bar */}
-          <View style={styles.searchBar}>
-            <Text style={styles.searchIcon}>🔍</Text>
-            <TextInput
-              style={styles.searchInput}
-              value={tokenSearch}
-              onChangeText={setTokenSearch}
-              placeholder={`Search name, symbol, or paste ${activeChain.name} address`}
-              placeholderTextColor={theme.colors.grey}
-            />
-          </View>
+          {/* Search Bar with Gradient Border */}
+          <LinearGradient
+            colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.searchBarGradient}
+          >
+            <View style={styles.searchBar}>
+              <Text style={styles.searchIcon}>🔍</Text>
+              <TextInput
+                style={styles.searchInput}
+                value={tokenSearch}
+                onChangeText={setTokenSearch}
+                placeholder={`Search name, symbol, or paste ${activeChain.name} address`}
+                placeholderTextColor={theme.colors.grey}
+              />
+            </View>
+          </LinearGradient>
 
           {/* Change Chain Link */}
           <TouchableOpacity
@@ -187,16 +195,18 @@ function createStyles(theme: ThemeType) {
       fontFamily: theme.fonts.families.openBold,
       fontSize: 17,
     },
+    searchBarGradient: {
+      borderRadius: 14,
+      padding: 1.5,
+      marginBottom: 12,
+    },
     searchBar: {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: theme.colors.dark,
-      borderRadius: 12,
-      borderWidth: 1.5,
-      borderColor: "#3772FF",
+      borderRadius: 12.5,
       paddingHorizontal: 14,
       paddingVertical: 10,
-      marginBottom: 12,
     },
     searchIcon: {
       fontSize: 14,
@@ -212,7 +222,7 @@ function createStyles(theme: ThemeType) {
       marginBottom: 16,
     },
     changeChainText: {
-      color: "#5B8DFF",
+      color: theme.colors.primaryLight,
       fontFamily: theme.fonts.families.openRegular,
       fontSize: 13,
     },

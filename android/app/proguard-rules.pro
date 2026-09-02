@@ -11,4 +11,17 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
-# Add any project specific keep options here:
+# JNA & Java AWT (Suppresses missing class warnings during R8 minification)
+-dontwarn java.awt.**
+-dontwarn com.sun.jna.**
+-dontwarn javax.annotation.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.bitcoinj.**
+-keep class com.sun.jna.** { *; }
+-keepclassmembers class * extends com.sun.jna.** { *; }
+
+# Web3 / Crypto dependencies
+-dontwarn org.slf4j.**
+-dontwarn com.fasterxml.jackson.**
+-dontwarn okhttp3.**
+-dontwarn okio.**

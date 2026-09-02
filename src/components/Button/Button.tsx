@@ -1,6 +1,5 @@
 import React from "react";
-import { ActivityIndicator } from "react-native";
-import styled from "styled-components/native";
+import styled, { useTheme } from "styled-components/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { ThemeType } from "../../styles/theme";
 import PulseDotLoader from "../Loader/DotLoader";
@@ -18,9 +17,8 @@ interface ButtonContainerProps {
 
 export const LinearGradientBackground = styled(LinearGradient)`
   padding: 10px 20px;
-  border-radius: 5px;
   align-items: center;
-  height: 60px;
+  height: 56px;
   justify-content: center;
   width: 100%;
   border-radius: ${(props) => props.theme.borderRadius.large};
@@ -28,25 +26,27 @@ export const LinearGradientBackground = styled(LinearGradient)`
 
 const ButtonContainer = styled.TouchableOpacity<ButtonContainerProps>`
   background-color: ${({ theme, backgroundColor }) =>
-    backgroundColor ? backgroundColor : theme.colors.dark};
-  /* padding: 10px 20px; */
-  border-radius: 5px;
+    backgroundColor ? backgroundColor : "transparent"};
   align-items: center;
-  height: 60px;
+  height: 56px;
   justify-content: center;
   width: 100%;
   border-radius: ${(props) => props.theme.borderRadius.large};
+  overflow: hidden;
 `;
 
 const ButtonText = styled.Text<ButtonTextProps>`
   font-family: ${(props) => props.theme.fonts.families.openBold};
-  font-size: ${(props) => props.theme.fonts.sizes.header};
-  color: ${({ theme, color }) => (color ? color : theme.fonts.colors.primary)};
+  font-size: ${(props) => props.theme.fonts.sizes.large};
+  color: ${({ color }) => (color ? color : "#FFFFFF")};
+  letter-spacing: 0.3px;
 `;
 
 const Row = styled.View<{ theme: ThemeType }>`
   display: flex;
   flex-direction: row;
+  align-items: center;
+  justify-content: center;
 `;
 
 const IconContainer = styled.View<{ theme: ThemeType }>`
@@ -74,43 +74,50 @@ const Button: React.FC<ButtonProps> = ({
   loading = false,
   linearGradient,
 }) => {
-  if (linearGradient) {
+  const theme = useTheme() as ThemeType;
+  const gradientColors = linearGradient || theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const);
+
+  if (backgroundColor) {
     return (
       <ButtonContainer
         disabled={disabled}
         backgroundColor={backgroundColor}
         onPress={disabled ? undefined : onPress}
+        style={{ opacity: disabled ? 0.5 : 1 }}
       >
-        <LinearGradientBackground
-          start={{ x: 0.5, y: 0.2 }}
-          colors={linearGradient}
-        >
-          {!loading ? (
-            <Row>
-              {icon && <IconContainer>{icon}</IconContainer>}
-              <ButtonText color={color}>{title}</ButtonText>
-            </Row>
-          ) : (
-            <PulseDotLoader size={50} color="#fff" />
-          )}
-        </LinearGradientBackground>
+        {!loading ? (
+          <Row theme={theme}>
+            {icon && <IconContainer theme={theme}>{icon}</IconContainer>}
+            <ButtonText theme={theme} color={color}>{title}</ButtonText>
+          </Row>
+        ) : (
+          <PulseDotLoader size={50} color="#fff" />
+        )}
       </ButtonContainer>
     );
   }
+
   return (
     <ButtonContainer
       disabled={disabled}
-      backgroundColor={backgroundColor}
       onPress={disabled ? undefined : onPress}
+      style={{ opacity: disabled ? 0.5 : 1 }}
     >
-      {!loading ? (
-        <Row>
-          {icon && <IconContainer>{icon}</IconContainer>}
-          <ButtonText color={color}>{title}</ButtonText>
-        </Row>
-      ) : (
-        <PulseDotLoader size={50} color="#fff" />
-      )}
+      <LinearGradientBackground
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        colors={gradientColors}
+        theme={theme}
+      >
+        {!loading ? (
+          <Row theme={theme}>
+            {icon && <IconContainer theme={theme}>{icon}</IconContainer>}
+            <ButtonText theme={theme} color={color}>{title}</ButtonText>
+          </Row>
+        ) : (
+          <PulseDotLoader size={50} color="#fff" />
+        )}
+      </LinearGradientBackground>
     </ButtonContainer>
   );
 };

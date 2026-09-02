@@ -88,9 +88,9 @@ const PrimaryButton: React.FC<ButtonProps> = ({
   if (useGradient) {
     return (
       <GradientContainer
-        colors={["#3772FF", "#9B59B6"]}
+        colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        end={{ x: 1, y: 0 }}
       >
         <Circle style={{ backgroundColor: "rgba(0,0,0,0.2)" }}>{icon}</Circle>
         <PrimaryButtonText 
