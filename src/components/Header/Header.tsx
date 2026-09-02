@@ -72,25 +72,23 @@ const Header: React.FC<HeaderProps> = ({
       style={[styles.headerContainer, { paddingTop: insets.top + 8 }]}
     >
       <View style={styles.contentRow}>
-        {/* Left: Drawer Toggle / Back Button & Brand */}
+        {/* Left: Back Button or Brand Logo */}
         <View style={styles.leftGroup}>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={[
-              styles.drawerButton,
-              {
-                backgroundColor: theme.colors.cardBackground,
-                borderColor: theme.colors.border,
-              },
-            ]}
-            onPress={handleLeftAction}
-          >
-            {showBack ? (
+          {showBack && (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={[
+                styles.drawerButton,
+                {
+                  backgroundColor: theme.colors.cardBackground,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+              onPress={handleLeftAction}
+            >
               <ChevronLeftIcon size={20} color={theme.colors.white} strokeWidth={2.2} />
-            ) : (
-              <MenuIcon size={20} color={theme.colors.white} strokeWidth={2.2} />
-            )}
-          </TouchableOpacity>
+            </TouchableOpacity>
+          )}
 
           {title ? (
             <View style={styles.brandContainer}>

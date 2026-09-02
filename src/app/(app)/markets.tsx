@@ -12,17 +12,17 @@ import { useTheme } from "styled-components/native";
 import { useSafeAreaInsets, EdgeInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import type { ThemeType } from "../../../styles/theme";
-import { SafeAreaContainer } from "../../../components/Styles/Layout.styles";
-import Header from "../../../components/Header/Header";
-import { BlockchainIcon } from "../../../components/BlockchainIcon/BlockchainIcon";
-import { ChainSelectorModal } from "../../../components/ChainSelectorModal/ChainSelectorModal";
-import { CHAINS, DEFAULT_TOKENS, type Chain } from "../../../constants/tokenRegistry";
+import type { ThemeType } from "../../styles/theme";
+import { SafeAreaContainer } from "../../components/Styles/Layout.styles";
+import Header from "../../components/Header/Header";
+import { BlockchainIcon } from "../../components/BlockchainIcon/BlockchainIcon";
+import { ChainSelectorModal } from "../../components/ChainSelectorModal/ChainSelectorModal";
+import { CHAINS, DEFAULT_TOKENS, type Chain } from "../../constants/tokenRegistry";
 import {
   SearchIcon,
   SwapIcon,
   MarketsIcon,
-} from "../../../components/Icons/AppIcons";
+} from "../../components/Icons/AppIcons";
 
 interface MarketItem {
   symbol: string;

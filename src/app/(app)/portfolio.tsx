@@ -13,20 +13,20 @@ import { useSafeAreaInsets, EdgeInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAccount, useAppKit } from "@reown/appkit-react-native";
-import type { ThemeType } from "../../../styles/theme";
-import { SafeAreaContainer } from "../../../components/Styles/Layout.styles";
-import Header from "../../../components/Header/Header";
-import { BlockchainIcon } from "../../../components/BlockchainIcon/BlockchainIcon";
-import { ChainSelectorModal } from "../../../components/ChainSelectorModal/ChainSelectorModal";
-import { CHAINS, type Chain } from "../../../constants/tokenRegistry";
+import type { ThemeType } from "../../styles/theme";
+import { SafeAreaContainer } from "../../components/Styles/Layout.styles";
+import Header from "../../components/Header/Header";
+import { BlockchainIcon } from "../../components/BlockchainIcon/BlockchainIcon";
+import { ChainSelectorModal } from "../../components/ChainSelectorModal/ChainSelectorModal";
+import { CHAINS, type Chain } from "../../constants/tokenRegistry";
 
-import { PortfolioChart, Timeframe, TIMEFRAME_DATA } from "../../../components/PortfolioChart/PortfolioChart";
+import { PortfolioChart, Timeframe, TIMEFRAME_DATA } from "../../components/PortfolioChart/PortfolioChart";
 import {
   SwapIcon,
   CoinsIcon,
   YieldIcon,
   HistoryIcon,
-} from "../../../components/Icons/AppIcons";
+} from "../../components/Icons/AppIcons";
 
 type TabType = "tokens" | "defi" | "activity";
 

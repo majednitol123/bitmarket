@@ -1,17 +1,17 @@
 import styled, { useTheme } from "styled-components/native";
-import { AppDispatch, RootState } from "../../../store";
-import { ThemeType } from "../../../styles/theme";
-import { SafeAreaContainer } from "../../../components/Styles/Layout.styles";
+import { AppDispatch, RootState } from "../../store";
+import { ThemeType } from "../../styles/theme";
+import { SafeAreaContainer } from "../../components/Styles/Layout.styles";
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { authenticateBiometric, saveBiometricPreference, checkBiometricAvailability } from "../../../store/biometricsSlice";
+import { authenticateBiometric, saveBiometricPreference, checkBiometricAvailability } from "../../store/biometricsSlice";
 import { Switch, Alert, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { LinearGradientBackground } from "../../../components/Styles/Gradient";
-import { setThemeMode, ThemeMode, setNotificationsEnabled } from "../../../store/settingsSlice";
+import { LinearGradientBackground } from "../../components/Styles/Gradient";
+import { setThemeMode, ThemeMode, setNotificationsEnabled } from "../../store/settingsSlice";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as Notifications from "expo-notifications";
-import { notifyNotificationsToggled } from "../../../services/notificationService";
+import { notifyNotificationsToggled } from "../../services/notificationService";
 import {
   BellIcon,
   ShieldCheckIcon,
@@ -22,8 +22,8 @@ import {
   DollarIcon,
   HelpCircleIcon,
   InfoIcon,
-} from "../../../components/Icons/AppIcons";
-import Header from "../../../components/Header/Header";
+} from "../../components/Icons/AppIcons";
+import Header from "../../components/Header/Header";
 
 const ScrollContainer = styled.ScrollView`
   flex: 1;

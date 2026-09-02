@@ -9,6 +9,7 @@ export interface Routes {
   settings: string;
   camera: string;
   portfolio: string;
+  markets: string;
 }
 
 export const ROUTES: Routes = {
@@ -19,7 +20,8 @@ export const ROUTES: Routes = {
   walletCreatedSuccessfully: "/(wallet)/setup/wallet-created-successfully",
   biometrics: "/(wallet)/biometrics",
   forgotPassword: "/(wallet)/forgot-password",
-  settings: "/(app)/settings/settings-modal",
+  settings: "/(app)/settings",
   camera: "/(app)/camera",
   portfolio: "/(app)/portfolio",
+  markets: "/(app)/markets",
 };

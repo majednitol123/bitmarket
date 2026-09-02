@@ -2,7 +2,7 @@ import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
 import { useCallback, useEffect, useState } from "react";
 import { router } from "expo-router";
-import { Drawer } from "expo-router/drawer";
+import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { useSelector } from "react-redux";
 import styled, { useTheme } from "styled-components/native";
 import Toast from "react-native-toast-message";
@@ -12,10 +12,9 @@ import type { RootState } from "../../store";
 import { store } from "../../store";
 import { toastConfig } from "../../config/toast";
 import SplashScreenOverlay from "../../components/AnimatedSplashScreen/AnimatedSplashScreen";
-import { CustomDrawerContent } from "../../components/ExpoDrawer/CustomDrawerContent";
 import { ThemeType } from "../../styles/theme";
 import { ROUTES } from "../../constants/routes";
-import { Alert, Dimensions, View } from "react-native";
+import { Alert, View } from "react-native";
 import { AppKit } from "@reown/appkit-react-native";
 
 export const LinearGradientBackground = styled(LinearGradient)<{
@@ -40,11 +39,11 @@ export default function AppLayout() {
         Alert.alert("Error", `Something went wrong: ${err instanceof Error ? err.message : err}`);
       } finally {
         setAppReady(true);
-        await SplashScreen.hideAsync();
+        await SplashScreen.hideAsync().catch(() => {});
       }
     };
 
-    SystemUI.setBackgroundColorAsync(theme.colors.background);
+    SystemUI.setBackgroundColorAsync(theme.colors.background).catch(() => {});
     prepare();
   }, []);
 
@@ -78,68 +77,60 @@ export default function AppLayout() {
     }
   }, [appReady]);
 
-  const screenWidth = Dimensions.get("window").width;
-  const drawerWidth = Math.min(screenWidth * 0.82, 340);
-
   return (
     <LinearGradientBackground colors={theme.colors.primaryLinearGradient} onLayout={onLayoutRootView}>
       <SplashScreenOverlay appReady={appReady}>
-        <Drawer
-          drawerContent={(props) => <CustomDrawerContent {...props} />}
-          screenOptions={{
-            headerShown: false,
-            drawerType: "front",
-            drawerStyle: {
-              width: drawerWidth,
-              backgroundColor: "transparent",
-            },
-            overlayColor: "rgba(0, 0, 0, 0.65)",
-            swipeEdgeWidth: 80,
+        <NativeTabs
+          backgroundColor={theme.colors.cardBackground || theme.colors.background}
+          tintColor={theme.colors.primaryLight || "#A855F7"}
+          iconColor={{
+            default: theme.colors.grey || "#64748B",
+            selected: theme.colors.primaryLight || "#A855F7",
           }}
+          labelStyle={{
+            default: { color: theme.colors.grey || "#64748B", fontSize: 11, fontWeight: "600" },
+            selected: { color: theme.colors.primaryLight || "#A855F7", fontSize: 11, fontWeight: "700" },
+          }}
+          labelVisibilityMode="labeled"
+          indicatorColor="rgba(168, 85, 247, 0.22)"
+          rippleColor="rgba(168, 85, 247, 0.15)"
+          tabBarRespectsIMEInsets={true}
+          disableTransparentOnScrollEdge={true}
+          shadowColor="rgba(0, 0, 0, 0.2)"
         >
-          <Drawer.Screen
-            name="index"
-            options={{
-              drawerLabel: "Exchange",
-              headerShown: false,
-            }}
-          />
-          <Drawer.Screen
-            name="portfolio/index"
-            options={{
-              drawerLabel: "Portfolio",
-              headerShown: false,
-            }}
-          />
-          <Drawer.Screen
-            name="markets/index"
-            options={{
-              drawerLabel: "Markets",
-              headerShown: false,
-            }}
-          />
-          <Drawer.Screen
-            name="gas-tracker/index"
-            options={{
-              drawerLabel: "Gas Tracker",
-              headerShown: false,
-            }}
-          />
-          <Drawer.Screen
-            name="camera/index"
-            options={{
-              drawerLabel: "Camera",
-              headerShown: false,
-            }}
-          />
-          <Drawer.Screen
-            name="settings/settings-modal"
-            options={{
-              drawerLabel: "Settings",
-              headerShown: false,
-            }}
-          />
-        </Drawer>
+          <NativeTabs.Trigger name="index">
+            <NativeTabs.Trigger.Label>Exchange</NativeTabs.Trigger.Label>
+            <NativeTabs.Trigger.Icon
+              sf={{ default: "arrow.left.arrow.right", selected: "arrow.left.arrow.right.circle.fill" }}
+              md={{ default: "swap_horiz", selected: "swap_horiz" }}
+            />
+          </NativeTabs.Trigger>
+
+          <NativeTabs.Trigger name="markets">
+            <NativeTabs.Trigger.Label>Market</NativeTabs.Trigger.Label>
+            <NativeTabs.Trigger.Icon
+              sf={{ default: "chart.line.uptrend.xyaxis", selected: "chart.line.uptrend.xyaxis.circle.fill" }}
+              md={{ default: "trending_up", selected: "trending_up" }}
+            />
+          </NativeTabs.Trigger>
+
+          <NativeTabs.Trigger name="portfolio">
+            <NativeTabs.Trigger.Label>Portfolio</NativeTabs.Trigger.Label>
+            <NativeTabs.Trigger.Icon
+              sf={{ default: "creditcard", selected: "creditcard.fill" }}
+              md={{ default: "account_balance_wallet", selected: "account_balance_wallet" }}
+            />
+          </NativeTabs.Trigger>
+
+          <NativeTabs.Trigger name="settings">
+            <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
+            <NativeTabs.Trigger.Icon
+              sf={{ default: "gearshape", selected: "gearshape.fill" }}
+              md={{ default: "settings", selected: "settings" }}
+            />
+          </NativeTabs.Trigger>
+        </NativeTabs>
+
         <Toast position="top" topOffset={75} config={toastConfig} />
         <View style={{ position: "absolute", height: "100%", width: "100%", pointerEvents: "box-none" }}>
           <AppKit />
