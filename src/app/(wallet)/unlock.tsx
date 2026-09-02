@@ -158,7 +158,7 @@ export default function UnlockScreen() {
                   <MotiView
                     animate={{
                       borderColor: isFocused ? theme.colors.primary : theme.colors.border,
-                      backgroundColor: isFocused ? "rgba(240, 185, 11, 0.05)" : theme.colors.dark,
+                      backgroundColor: isFocused ? "rgba(55, 114, 255, 0.08)" : theme.colors.dark,
                     }}
                     transition={{ type: "timing", duration: 200 }}
                     style={styles.inputWrapper}
@@ -254,7 +254,7 @@ function createStyles(theme: ThemeType) {
       width: 64,
       height: 64,
       borderRadius: 32,
-      backgroundColor: "rgba(240, 185, 11, 0.15)",
+      backgroundColor: "rgba(55, 114, 255, 0.15)",
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 20,

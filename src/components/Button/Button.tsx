@@ -79,7 +79,7 @@ const Button: React.FC<ButtonProps> = ({
       <ButtonContainer
         disabled={disabled}
         backgroundColor={backgroundColor}
-        onPress={disabled ? null : onPress}
+        onPress={disabled ? undefined : onPress}
       >
         <LinearGradientBackground
           start={{ x: 0.5, y: 0.2 }}
@@ -101,7 +101,7 @@ const Button: React.FC<ButtonProps> = ({
     <ButtonContainer
       disabled={disabled}
       backgroundColor={backgroundColor}
-      onPress={disabled ? null : onPress}
+      onPress={disabled ? undefined : onPress}
     >
       {!loading ? (
         <Row>

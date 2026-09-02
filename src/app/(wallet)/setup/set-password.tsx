@@ -31,7 +31,7 @@ const IconCircle = styled.View<{ theme: ThemeType }>`
   width: 64px;
   height: 64px;
   border-radius: 32px;
-  background-color: rgba(240, 185, 11, 0.15);
+  background-color: rgba(55, 114, 255, 0.15);
   justify-content: center;
   align-items: center;
   margin-bottom: 20px;
@@ -195,7 +195,7 @@ export default function SetPasswordScreen() {
                 animate={{
                   borderColor: isFocused1 ? theme.colors.primary : theme.colors.border,
                   borderWidth: isFocused1 ? 2 : 1,
-                  backgroundColor: isFocused1 ? "rgba(240, 185, 11, 0.05)" : theme.colors.dark,
+                  backgroundColor: isFocused1 ? "rgba(55, 114, 255, 0.08)" : theme.colors.dark,
                 }}
                 transition={{ type: "timing", duration: 200 }}
                 style={localStyles.inputWrapper}
@@ -232,7 +232,7 @@ export default function SetPasswordScreen() {
                 animate={{
                   borderColor: isFocused2 ? theme.colors.primary : theme.colors.border,
                   borderWidth: isFocused2 ? 2 : 1,
-                  backgroundColor: isFocused2 ? "rgba(240, 185, 11, 0.05)" : theme.colors.dark,
+                  backgroundColor: isFocused2 ? "rgba(55, 114, 255, 0.08)" : theme.colors.dark,
                 }}
                 transition={{ type: "timing", duration: 200 }}
                 style={localStyles.inputWrapper}

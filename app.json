@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "CoinMask",
+    "name": "BitMarket",
     "slug": "rn-crypto-wallet",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -79,6 +79,14 @@
             "image": "./assets/app-icon.png",
             "backgroundColor": "#0A0A0F"
           }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/app-icon.png",
+          "color": "#3772FF",
+          "sounds": []
         }
       ]
     ],

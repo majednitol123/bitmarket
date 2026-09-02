@@ -78,34 +78,34 @@ export type ThemeType = {
 
 export const DarkTheme: ThemeType = {
   colors: {
-    // Premium dark crypto palette
-    primary: "#F0B90B",          // Binance Gold - primary accent
-    primaryLight: "#FFD700",     // Lighter gold
-    gold: "#F0B90B",
+    // Premium dark crypto palette (Electric Blue + Deep Purple)
+    primary: "#3772FF",          // Electric blue - primary accent
+    primaryLight: "#5B8DFF",     // Lighter blue
+    gold: "#3772FF",
     blue: "#3772FF",             // Electric blue accent
-    dark: "#0B0E14",             // Deep navy black background
-    darker: "#080A0F",           // Even darker
-    lightDark: "#151920",        // Card/surface background
-    cardBackground: "#1A1F2E",   // Slightly lighter card bg
-    accent: "#F97068",
-    background: "#0B0E14",
-    highlight: "#D1D646",
+    dark: "#0B0E1A",             // Deep navy black background
+    darker: "#070913",           // Even darker
+    lightDark: "#121526",        // Card/surface background
+    cardBackground: "#161B2E",   // Sleek dark card bg
+    accent: "#8B5CF6",           // Vibrant purple accent
+    background: "#0B0E1A",
+    highlight: "#8B5CF6",
     white: "#FFFFFF",
     offWhite: "#F5F5F5",
     lightGrey: "#8A8F9E",        // Secondary text
     grey: "#5A6072",             // Muted elements
-    muted: "#3A3F4E",            // Borders, dividers
+    muted: "#2E344D",            // Borders, dividers
     error: "#FF4D4F",
     success: "#00C087",
-    ethereum: "#C8B3F4",
+    ethereum: "#627EEA",
     solana: "#00DCFA",
-    border: "#2A2F3E",
-    borderLight: "#3A3F4E",
+    border: "#252B42",
+    borderLight: "#343B58",
     // Gradients
     primaryLinearGradient: ["#0B0E1A", "#0F1030", "#1A1050"] as const,
-    secondaryLinearGradient: ["#1A1F2E", "#0B0E14"] as const,
-    cardGradient: ["#1A1F2E", "#151920"] as const,
-    headerGradient: ["rgba(11, 14, 20, 0.95)", "rgba(11, 14, 20, 0)"] as const,
+    secondaryLinearGradient: ["#161B2E", "#0B0E1A"] as const,
+    cardGradient: ["#161B2E", "#121526"] as const,
+    headerGradient: ["rgba(11, 14, 26, 0.95)", "rgba(11, 14, 26, 0)"] as const,
     darkText: "#FFFFFF",
     realWhite: "#FFFFFF",
     black: "#000000",
@@ -133,10 +133,10 @@ export const DarkTheme: ThemeType = {
     },
     colors: {
       primary: "#FFFFFF",
-      dark: "#0B0E14",
-      accent: "#F0B90B",
-      background: "#0B0E14",
-      highlight: "#D1D646",
+      dark: "#0B0E1A",
+      accent: "#3772FF",
+      background: "#0B0E1A",
+      highlight: "#8B5CF6",
     },
   },
   spacing: {
@@ -158,26 +158,26 @@ export const DarkTheme: ThemeType = {
 
 export const LightTheme: ThemeType = {
   colors: {
-    // Premium light crypto palette (Glassmorphism concept)
-    primary: "#F0B90B",          // Gold brand color
-    primaryLight: "#FFD700",
-    gold: "#F0B90B",
+    // Premium light crypto palette (Glassmorphism concept with Blue & Purple)
+    primary: "#3772FF",          // Blue brand color
+    primaryLight: "#5B8DFF",
+    gold: "#3772FF",
     blue: "#3772FF",             // Vibrant electric blue
     dark: "#F4F6FA",             // Light cool-grey app background
     darker: "#E8ECF4",           // Subtle background overlay
     lightDark: "#FFFFFF",        // Opaque white container background
     cardBackground: "rgba(255, 255, 255, 0.75)", // High blur glassmorphic card bg
-    accent: "#F97068",
+    accent: "#8B5CF6",
     background: "#F4F6FA",
-    highlight: "#D1D646",
-    white: "#0B0E14",            // Map white to dark slate for automatic typography inversion
+    highlight: "#8B5CF6",
+    white: "#0B0E1A",            // Map white to dark slate for automatic typography inversion
     offWhite: "#1E293B",         // Slate-800
     lightGrey: "#64748B",        // Slate-500 (high contrast secondary text)
     grey: "#94A3B8",             // Slate-400 (muted details)
     muted: "#CBD5E1",            // Slate-300 (borders and dividers)
     error: "#FF4D4F",
     success: "#00B074",          // Darker green for accessibility on light background
-    ethereum: "#7C3AED",         // Darker violet for readability
+    ethereum: "#627EEA",         // Darker violet for readability
     solana: "#008A9E",           // Darker teal for readability
     border: "#E2E8F0",           // Light grey borders
     borderLight: "#EDF2F7",
@@ -212,11 +212,11 @@ export const LightTheme: ThemeType = {
       bold: "700",
     },
     colors: {
-      primary: "#0B0E14",        // Text in buttons defaults to dark slate
-      dark: "#0B0E14",
-      accent: "#F0B90B",
+      primary: "#0B0E1A",        // Text in buttons defaults to dark slate
+      dark: "#0B0E1A",
+      accent: "#3772FF",
       background: "#F4F6FA",
-      highlight: "#D1D646",
+      highlight: "#8B5CF6",
     },
   },
   spacing: {

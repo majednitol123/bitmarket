@@ -57,7 +57,7 @@ const Circle = styled.View`
   width: 28px;
   height: 28px;
   border-radius: 9px;
-  background-color: rgba(240, 185, 11, 0.15);
+  background-color: rgba(55, 114, 255, 0.15);
   margin-right: 6px;
   flex-shrink: 0;
 `;
@@ -88,7 +88,7 @@ const PrimaryButton: React.FC<ButtonProps> = ({
   if (useGradient) {
     return (
       <GradientContainer
-        colors={["#F0B90B", "#D4A009"]}
+        colors={["#3772FF", "#9B59B6"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >

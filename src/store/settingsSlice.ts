@@ -4,10 +4,20 @@ export type ThemeMode = "light" | "dark" | "system";
 
 export interface SettingsState {
   themeMode: ThemeMode;
+  slippage: string;
+  customSlippage: string;
+  slippageAuto: boolean;
+  deadline: string;
+  expertMode: boolean;
 }
 
 const initialState: SettingsState = {
   themeMode: "system",
+  slippage: "0.5",
+  customSlippage: "",
+  slippageAuto: true,
+  deadline: "20",
+  expertMode: false,
 };
 
 const settingsSlice = createSlice({
@@ -17,8 +27,32 @@ const settingsSlice = createSlice({
     setThemeMode(state, action: PayloadAction<ThemeMode>) {
       state.themeMode = action.payload;
     },
+    setSlippage(state, action: PayloadAction<string>) {
+      state.slippage = action.payload;
+    },
+    setCustomSlippage(state, action: PayloadAction<string>) {
+      state.customSlippage = action.payload;
+    },
+    setSlippageAuto(state, action: PayloadAction<boolean>) {
+      state.slippageAuto = action.payload;
+    },
+    setDeadline(state, action: PayloadAction<string>) {
+      state.deadline = action.payload;
+    },
+    setExpertMode(state, action: PayloadAction<boolean>) {
+      state.expertMode = action.payload;
+    },
   },
 });
 
-export const { setThemeMode } = settingsSlice.actions;
+export const {
+  setThemeMode,
+  setSlippage,
+  setCustomSlippage,
+  setSlippageAuto,
+  setDeadline,
+  setExpertMode,
+} = settingsSlice.actions;
+
 export default settingsSlice.reducer;
+

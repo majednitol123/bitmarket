@@ -210,7 +210,7 @@ export default function ForgotPasswordScreen() {
                   <MotiView
                     animate={{
                       borderColor: isFocusedPhrase ? theme.colors.primary : theme.colors.border,
-                      backgroundColor: isFocusedPhrase ? "rgba(240, 185, 11, 0.05)" : theme.colors.dark,
+                      backgroundColor: isFocusedPhrase ? "rgba(55, 114, 255, 0.08)" : theme.colors.dark,
                     }}
                     transition={{ type: "timing", duration: 200 }}
                     style={styles.phraseInputWrapper}
@@ -260,7 +260,7 @@ export default function ForgotPasswordScreen() {
                   <MotiView
                     animate={{
                       borderColor: isFocusedPw1 ? theme.colors.primary : theme.colors.border,
-                      backgroundColor: isFocusedPw1 ? "rgba(240, 185, 11, 0.05)" : theme.colors.dark,
+                      backgroundColor: isFocusedPw1 ? "rgba(55, 114, 255, 0.08)" : theme.colors.dark,
                     }}
                     transition={{ type: "timing", duration: 200 }}
                     style={styles.inputWrapper}
@@ -311,7 +311,7 @@ export default function ForgotPasswordScreen() {
                   <MotiView
                     animate={{
                       borderColor: isFocusedPw2 ? theme.colors.primary : theme.colors.border,
-                      backgroundColor: isFocusedPw2 ? "rgba(240, 185, 11, 0.05)" : theme.colors.dark,
+                      backgroundColor: isFocusedPw2 ? "rgba(55, 114, 255, 0.08)" : theme.colors.dark,
                     }}
                     transition={{ type: "timing", duration: 200 }}
                     style={styles.inputWrapper}
@@ -391,7 +391,7 @@ function createStyles(theme: ThemeType) {
       width: 64,
       height: 64,
       borderRadius: 32,
-      backgroundColor: "rgba(240, 185, 11, 0.15)",
+      backgroundColor: "rgba(55, 114, 255, 0.15)",
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 20,
@@ -438,7 +438,7 @@ function createStyles(theme: ThemeType) {
     warningContainer: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: "rgba(240, 185, 11, 0.08)",
+      backgroundColor: "rgba(55, 114, 255, 0.08)",
       borderRadius: 10,
       paddingVertical: 10,
       paddingHorizontal: 14,

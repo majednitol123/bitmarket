@@ -41,7 +41,7 @@ const IconCircle = styled.View<{ theme: ThemeType }>`
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background-color: rgba(240, 185, 11, 0.1);
+  background-color: rgba(55, 114, 255, 0.12);
   margin-right: 14px;
 `;
 
@@ -216,7 +216,8 @@ const SettingsIndex = () => {
     <LinearGradientBackground colors={theme.colors.primaryLinearGradient}>
       <SafeAreaContainer edges={["bottom", "left", "right"]}>
         <ScrollContainer showsVerticalScrollIndicator={false}>
-          <ContentContainer style={{ paddingTop: insets.top + 60 }}>
+          <ContentContainer style={{ paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }}>
+            {/* Security Group */}
             <SettingsGroup>
               <GroupTitle>Security</GroupTitle>
               <BiometricOptionCard

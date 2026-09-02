@@ -1,4 +1,6 @@
 PODS:
+  - EXApplication (57.0.2):
+    - ExpoModulesCore
   - EXConstants (57.0.15):
     - ExpoModulesCore
   - EXJSONUtils (57.0.1)
@@ -188,6 +190,8 @@ PODS:
     - ExpoModulesCore
   - ExpoCrypto (57.0.2):
     - ExpoModulesCore
+  - ExpoDevice (57.0.1):
+    - ExpoModulesCore
   - ExpoDomWebView (57.0.1):
     - ExpoModulesCore
   - ExpoFileSystem (57.0.6):
@@ -243,6 +247,8 @@ PODS:
     - ExpoModulesJSI
     - ExpoModulesWorklets
     - RNWorklets
+  - ExpoNotifications (57.0.16):
+    - ExpoModulesCore
   - ExpoRouter (57.0.17):
     - ExpoModulesCore
     - RNScreens
@@ -1689,6 +1695,29 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - react-native-compat (2.24.0):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
+    - YttriumWrapper (= 0.10.54)
   - react-native-get-random-values (1.11.0):
     - React-Core
   - react-native-keyboard-controller (1.21.9):
@@ -2600,8 +2629,10 @@ PODS:
     - Yoga
   - Sentry/HybridSDK (8.58.0)
   - Yoga (0.0.0)
+  - YttriumWrapper (0.10.54)
 
 DEPENDENCIES:
+  - EXApplication (from `../node_modules/expo-application/ios`)
   - EXConstants (from `../node_modules/expo-constants/ios`)
   - EXJSONUtils (from `../node_modules/expo-json-utils/ios`)
   - EXManifests (from `../node_modules/expo-manifests/ios`)
@@ -2615,6 +2646,7 @@ DEPENDENCIES:
   - ExpoCameraBarcodeScanning (from `../node_modules/expo-camera/ios/ExpoCameraBarcodeScanning.podspec`)
   - ExpoClipboard (from `../node_modules/expo-clipboard/ios`)
   - ExpoCrypto (from `../node_modules/expo-crypto/ios`)
+  - ExpoDevice (from `../node_modules/expo-device/ios`)
   - "ExpoDomWebView (from `../node_modules/@expo/dom-webview/ios`)"
   - ExpoFileSystem (from `../node_modules/expo-file-system/ios/ExpoFileSystem.podspec`)
   - ExpoFont (from `../node_modules/expo-font/ios/ExpoFont.podspec`)
@@ -2629,6 +2661,7 @@ DEPENDENCIES:
   - ExpoModulesJSI (from `../node_modules/expo-modules-jsi/apple`)
   - ExpoModulesWorklets (from `../node_modules/expo-modules-core/ExpoModulesWorklets.podspec`)
   - ExpoModulesWorkletsAdapter (from `../node_modules/expo-modules-core`)
+  - ExpoNotifications (from `../node_modules/expo-notifications/ios`)
   - ExpoRouter (from `../node_modules/expo-router/ios`)
   - ExpoSecureStore (from `../node_modules/expo-secure-store/ios`)
   - ExpoSplashScreen (from `../node_modules/expo-splash-screen/ios`)
@@ -2677,6 +2710,7 @@ DEPENDENCIES:
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
   - React-mutationobservernativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/mutationobserver`)
+  - "react-native-compat (from `../node_modules/@walletconnect/react-native-compat`)"
   - react-native-get-random-values (from `../node_modules/react-native-get-random-values`)
   - react-native-keyboard-controller (from `../node_modules/react-native-keyboard-controller`)
   - "react-native-netinfo (from `../node_modules/@react-native-community/netinfo`)"
@@ -2730,8 +2764,11 @@ DEPENDENCIES:
 SPEC REPOS:
   trunk:
     - Sentry
+    - YttriumWrapper
 
 EXTERNAL SOURCES:
+  EXApplication:
+    :path: "../node_modules/expo-application/ios"
   EXConstants:
     :path: "../node_modules/expo-constants/ios"
   EXJSONUtils:
@@ -2758,6 +2795,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-clipboard/ios"
   ExpoCrypto:
     :path: "../node_modules/expo-crypto/ios"
+  ExpoDevice:
+    :path: "../node_modules/expo-device/ios"
   ExpoDomWebView:
     :path: "../node_modules/@expo/dom-webview/ios"
   ExpoFileSystem:
@@ -2786,6 +2825,8 @@ EXTERNAL SOURCES:
     :podspec: "../node_modules/expo-modules-core/ExpoModulesWorklets.podspec"
   ExpoModulesWorkletsAdapter:
     :path: "../node_modules/expo-modules-core"
+  ExpoNotifications:
+    :path: "../node_modules/expo-notifications/ios"
   ExpoRouter:
     :path: "../node_modules/expo-router/ios"
   ExpoSecureStore:
@@ -2881,6 +2922,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
   React-mutationobservernativemodule:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/mutationobserver"
+  react-native-compat:
+    :path: "../node_modules/@walletconnect/react-native-compat"
   react-native-get-random-values:
     :path: "../node_modules/react-native-get-random-values"
   react-native-keyboard-controller:
@@ -2981,6 +3024,7 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
+  EXApplication: bbd517d50878ca1d121fb3843392beb210181e28
   EXConstants: e05664c2e0470c274210b8d0857ac2c4cc5e963c
   EXJSONUtils: 7a1683cfa2cbe6d11fca97097d51a496755b0287
   EXManifests: f9888c0bf5aaa6ddb7e3d4b224d6d54ac4ca84a4
@@ -2994,6 +3038,7 @@ SPEC CHECKSUMS:
   ExpoCameraBarcodeScanning: 14c72e1f522eb69f7a672d757eb294c096756faa
   ExpoClipboard: 95055b11758f339b61d4d8064dd799df1cf03b7f
   ExpoCrypto: f392e5f076a4c11dbfa1a6046449747acec82711
+  ExpoDevice: 93a72d7c2bd656a4f0c0d580523e390e9ee7fba5
   ExpoDomWebView: beaec034e51bd028428b98bb1f2633ab79c6d095
   ExpoFileSystem: cc500f33804065aacc7b3366007267b84deca8c8
   ExpoFont: 59e1faf66ba9bcd232ae1e2ce58d202a48b6f65e
@@ -3008,6 +3053,7 @@ SPEC CHECKSUMS:
   ExpoModulesJSI: 1529d4289b9a3647d8901a27b41f1af173598b45
   ExpoModulesWorklets: 57a11e6ae984c2680e7967b785ded96199caed8c
   ExpoModulesWorkletsAdapter: be52ecb2cbbed64febbb739971bd77d9c8e84569
+  ExpoNotifications: 7a46918d4bdf727a96a6142e8daaa16a33cf4115
   ExpoRouter: 9bf293bba85908c1834190e6913b22da1e573689
   ExpoSecureStore: cc7c4f560528e7a644b1342b0cc2790576e677e1
   ExpoSplashScreen: 6f422fd595600d78520c6b7dcf8a908fb8a7fec0
@@ -3055,6 +3101,7 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 3c805ea54675b00ef1755f23b3c1fccf34962b93
   React-microtasksnativemodule: 97a771dbbb4315c71579995b53e4e3e351a99d89
   React-mutationobservernativemodule: 530bff1bba9511a5133e3cf8170e3b2c0df49e89
+  react-native-compat: 59e234e2261797e89734cf3be9cc2f8b66da3909
   react-native-get-random-values: d16467cf726c618e9c7a8c3c39c31faa2244bbba
   react-native-keyboard-controller: d4796248609d4c03cd6b5f73a9fd083d7c5f33d6
   react-native-netinfo: 2f906d5d9a639090ed1c079135d6485a95f749f1
@@ -3105,7 +3152,8 @@ SPEC CHECKSUMS:
   RNWorklets: 43af89f696342f91118a2f1f3a879056e2f47331
   Sentry: d587a8fe91ca13503ecd69a1905f3e8a0fcf61be
   Yoga: 18b74b3ade30bebc1904004dfaceae1dd02a330a
+  YttriumWrapper: 850d3c5bfa7815ad9962591ff3c1b289039266f2
 
-PODFILE CHECKSUM: 074fe1f1052deb641e80ce6ea3829ac9409e7936
+PODFILE CHECKSUM: ad212bf7b17074b019e5c52520128077cf38bb3a
 
 COCOAPODS: 1.16.2

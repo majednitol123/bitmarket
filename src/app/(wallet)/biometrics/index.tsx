@@ -210,7 +210,7 @@ function createStyles(theme: ThemeType) {
       width: 140,
       height: 140,
       borderRadius: 70,
-      backgroundColor: "rgba(240, 185, 11, 0.1)",
+      backgroundColor: "rgba(55, 114, 255, 0.12)",
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 2,

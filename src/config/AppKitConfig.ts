@@ -84,10 +84,10 @@ export const appKit = createAppKit({
   adapters: [ethersAdapter, solanaAdapter],
   storage: appKitStorage,
   metadata: {
-    name: "Agregator",
-    description: "Multi-chain wallet aggregator",
-    url: "https://agregator.app",
-    icons: ["https://agregator.app/icon.png"],
+    name: "BitMarket",
+    description: "Multi-chain crypto exchange and wallet aggregator",
+    url: "https://bitmarket.app",
+    icons: ["https://bitmarket.app/icon.png"],
     redirect: {
       native: "rn-crypto-wallet://",
     },
