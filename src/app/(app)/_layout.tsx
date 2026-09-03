@@ -101,8 +101,8 @@ export default function AppLayout() {
           <NativeTabs.Trigger name="index">
             <NativeTabs.Trigger.Label>Exchange</NativeTabs.Trigger.Label>
             <NativeTabs.Trigger.Icon
-              sf={{ default: "arrow.left.arrow.right", selected: "arrow.left.arrow.right.circle.fill" }}
-              md={{ default: "swap_horiz", selected: "swap_horiz" }}
+              sf={{ default: "arrow.triangle.2.circlepath", selected: "arrow.triangle.2.circlepath.circle.fill" }}
+              md={{ default: "swap_horiz", selected: "currency_exchange" }}
             />
           </NativeTabs.Trigger>
 
@@ -110,15 +110,15 @@ export default function AppLayout() {
             <NativeTabs.Trigger.Label>Market</NativeTabs.Trigger.Label>
             <NativeTabs.Trigger.Icon
               sf={{ default: "chart.line.uptrend.xyaxis", selected: "chart.line.uptrend.xyaxis.circle.fill" }}
-              md={{ default: "trending_up", selected: "trending_up" }}
+              md={{ default: "show_chart", selected: "candlestick_chart" }}
             />
           </NativeTabs.Trigger>
 
           <NativeTabs.Trigger name="portfolio">
             <NativeTabs.Trigger.Label>Portfolio</NativeTabs.Trigger.Label>
             <NativeTabs.Trigger.Icon
-              sf={{ default: "creditcard", selected: "creditcard.fill" }}
-              md={{ default: "account_balance_wallet", selected: "account_balance_wallet" }}
+              sf={{ default: "wallet.pass", selected: "wallet.pass.fill" }}
+              md={{ default: "account_balance_wallet", selected: "wallet" }}
             />
           </NativeTabs.Trigger>
 
@@ -126,7 +126,7 @@ export default function AppLayout() {
             <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
             <NativeTabs.Trigger.Icon
               sf={{ default: "gearshape", selected: "gearshape.fill" }}
-              md={{ default: "settings", selected: "settings" }}
+              md={{ default: "settings", selected: "settings_suggest" }}
             />
           </NativeTabs.Trigger>
         </NativeTabs>

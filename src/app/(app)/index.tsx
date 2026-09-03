@@ -212,7 +212,7 @@ export default function Index() {
                   alignItems: "center",
                 }}
               >
-                <SwapIcon size={18} color="#FFFFFF" strokeWidth={2.5} />
+                <SwapIcon size={18} color={theme.colors.white} strokeWidth={2.5} />
               </Animated.View>
             </TouchableOpacity>
           </View>
