@@ -246,6 +246,7 @@ export default function PortfolioScreen() {
     <SafeAreaContainer edges={["bottom", "left", "right"]}>
       <Header
         title="Portfolio"
+        rightAction="network"
         currentChainName={selectedChain.name}
         onOpenChainModal={() => setChainModalVisible(true)}
       />

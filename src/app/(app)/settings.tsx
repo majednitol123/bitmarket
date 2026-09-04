@@ -246,7 +246,7 @@ const SettingsIndex = () => {
   return (
     <LinearGradientBackground colors={theme.colors.primaryLinearGradient}>
       <SafeAreaContainer edges={["bottom", "left", "right"]}>
-        <Header title="Settings" />
+        <Header title="Settings" rightAction="connect" />
         <ScrollContainer showsVerticalScrollIndicator={false}>
           <ContentContainer style={{ paddingTop: 8, paddingBottom: insets.bottom + 40 }}>
             {/* Notifications Group */}

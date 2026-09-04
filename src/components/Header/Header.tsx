@@ -5,8 +5,9 @@ import { ThemeType } from "../../styles/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, router } from "expo-router";
-import { MenuIcon, ChevronDownIcon, ChevronLeftIcon } from "../Icons/AppIcons";
+import { MenuIcon, ChevronDownIcon, ChevronLeftIcon, PortfolioIcon } from "../Icons/AppIcons";
 import { ROUTES } from "../../constants/routes";
+import { useAppKit, useAccount } from "@reown/appkit-react-native";
 
 export interface HeaderProps {
   title?: string;
@@ -15,6 +16,7 @@ export interface HeaderProps {
   onOpenChainModal?: () => void;
   showBack?: boolean;
   onBack?: () => void;
+  rightAction?: "network" | "connect" | "none";
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -24,10 +26,18 @@ const Header: React.FC<HeaderProps> = ({
   onOpenChainModal,
   showBack,
   onBack,
+  rightAction = "connect",
 }) => {
   const theme = useTheme() as ThemeType;
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const { open } = useAppKit();
+  const { isConnected, address } = useAccount();
+
+  const formatAddress = (addr?: string) => {
+    if (!addr) return "";
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  };
 
   const handleOpenDrawer = () => {
     if (onOpenDrawer) {
@@ -113,28 +123,69 @@ const Header: React.FC<HeaderProps> = ({
           )}
         </View>
 
-        {/* Right: Network Selector */}
+        {/* Right Action */}
         <View style={styles.rightGroup}>
-          <TouchableOpacity
-            activeOpacity={0.75}
-            style={[
-              styles.networkPill,
-              {
-                backgroundColor: theme.colors.cardBackground,
-                borderColor: theme.colors.border,
-              },
-            ]}
-            onPress={onOpenChainModal}
-          >
-            <View style={styles.networkDot} />
-            <Text
-              style={[styles.networkPillText, { color: theme.colors.white }]}
-              numberOfLines={1}
+          {rightAction === "network" ? (
+            <TouchableOpacity
+              activeOpacity={0.75}
+              style={[
+                styles.networkPill,
+                {
+                  backgroundColor: theme.colors.cardBackground,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+              onPress={onOpenChainModal}
             >
-              {currentChainName}
-            </Text>
-            <ChevronDownIcon size={12} color={theme.colors.lightGrey} strokeWidth={2.5} />
-          </TouchableOpacity>
+              <View style={styles.networkDot} />
+              <Text
+                style={[styles.networkPillText, { color: theme.colors.white }]}
+                numberOfLines={1}
+              >
+                {currentChainName}
+              </Text>
+              <ChevronDownIcon size={12} color={theme.colors.lightGrey} strokeWidth={2.5} />
+            </TouchableOpacity>
+          ) : rightAction === "connect" ? (
+            isConnected && address ? (
+              <TouchableOpacity
+                activeOpacity={0.75}
+                style={[
+                  styles.networkPill,
+                  {
+                    backgroundColor: theme.colors.cardBackground,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+                onPress={() => open()}
+              >
+                <View style={styles.networkDot} />
+                <Text
+                  style={[styles.networkPillText, { color: theme.colors.white }]}
+                  numberOfLines={1}
+                >
+                  {formatAddress(address)}
+                </Text>
+                <ChevronDownIcon size={12} color={theme.colors.lightGrey} strokeWidth={2.5} />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.connectButton}
+                onPress={() => open()}
+              >
+                <LinearGradient
+                  colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.connectButtonGradient}
+                >
+                  <PortfolioIcon size={14} color="#FFFFFF" strokeWidth={2.2} />
+                  <Text style={styles.connectButtonText}>Connect</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )
+          ) : null}
         </View>
       </View>
     </LinearGradient>
@@ -208,6 +259,23 @@ const styles = StyleSheet.create({
     backgroundColor: "#10B981",
   },
   networkPillText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  connectButton: {
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  connectButtonGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
+    gap: 6,
+  },
+  connectButtonText: {
+    color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "700",
   },

@@ -102,7 +102,7 @@ export default function AppLayout() {
             <NativeTabs.Trigger.Label>Exchange</NativeTabs.Trigger.Label>
             <NativeTabs.Trigger.Icon
               sf={{ default: "arrow.triangle.2.circlepath", selected: "arrow.triangle.2.circlepath.circle.fill" }}
-              md={{ default: "swap_horiz", selected: "currency_exchange" }}
+              md={{ default: "change_circle", selected: "change_circle" }}
             />
           </NativeTabs.Trigger>
 
@@ -110,7 +110,7 @@ export default function AppLayout() {
             <NativeTabs.Trigger.Label>Market</NativeTabs.Trigger.Label>
             <NativeTabs.Trigger.Icon
               sf={{ default: "chart.line.uptrend.xyaxis", selected: "chart.line.uptrend.xyaxis.circle.fill" }}
-              md={{ default: "show_chart", selected: "candlestick_chart" }}
+              md={{ default: "monitoring", selected: "monitoring" }}
             />
           </NativeTabs.Trigger>
 
@@ -118,7 +118,7 @@ export default function AppLayout() {
             <NativeTabs.Trigger.Label>Portfolio</NativeTabs.Trigger.Label>
             <NativeTabs.Trigger.Icon
               sf={{ default: "wallet.pass", selected: "wallet.pass.fill" }}
-              md={{ default: "account_balance_wallet", selected: "wallet" }}
+              md={{ default: "wallet", selected: "wallet" }}
             />
           </NativeTabs.Trigger>
 
@@ -126,7 +126,7 @@ export default function AppLayout() {
             <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
             <NativeTabs.Trigger.Icon
               sf={{ default: "gearshape", selected: "gearshape.fill" }}
-              md={{ default: "settings", selected: "settings_suggest" }}
+              md={{ default: "settings", selected: "settings" }}
             />
           </NativeTabs.Trigger>
         </NativeTabs>

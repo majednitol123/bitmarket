@@ -94,11 +94,7 @@ export default function Index() {
 
   return (
     <SafeAreaContainer edges={["bottom", "left", "right"]}>
-      {/* ═══ Header with Drawer Toggle & Network Selector ═══ */}
-      <Header
-        currentChainName={swap.displayChain.name}
-        onOpenChainModal={() => swap.openChainModal("from")}
-      />
+      <Header rightAction="connect" />
 
       <ScrollView
         contentContainerStyle={[

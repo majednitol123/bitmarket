@@ -214,11 +214,7 @@ export default function MarketsScreen() {
 
   return (
     <SafeAreaContainer edges={["bottom", "left", "right"]}>
-      <Header
-        title="Markets"
-        currentChainName={selectedChain.name}
-        onOpenChainModal={() => setChainModalVisible(true)}
-      />
+      <Header title="Markets" rightAction="connect" />
 
       <ScrollView
         contentContainerStyle={[
