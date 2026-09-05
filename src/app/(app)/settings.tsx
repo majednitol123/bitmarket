@@ -248,7 +248,7 @@ const SettingsIndex = () => {
       <SafeAreaContainer edges={["bottom", "left", "right"]}>
         <Header title="Settings" rightAction="connect" />
         <ScrollContainer showsVerticalScrollIndicator={false}>
-          <ContentContainer style={{ paddingTop: 8, paddingBottom: insets.bottom + 40 }}>
+          <ContentContainer style={{ paddingTop: 8, paddingBottom: insets.bottom + 120 }}>
             {/* Notifications Group */}
             <SettingsGroup>
               <GroupTitle>Notifications</GroupTitle>

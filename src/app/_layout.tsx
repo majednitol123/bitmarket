@@ -369,7 +369,7 @@ function InnerApp() {
 
   const themeMode = useSelector((state: RootState) => state.settings?.themeMode ?? "dark");
   const systemColorScheme = useColorScheme();
-  const isDark = themeMode === "system" ? true : themeMode !== "light";
+  const isDark = themeMode === "system" ? systemColorScheme !== "light" : themeMode !== "light";
   const activeTheme = isDark ? DarkTheme : LightTheme;
 
   // Sync Redux themeMode to Native System & Appearance

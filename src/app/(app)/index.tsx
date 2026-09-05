@@ -99,7 +99,7 @@ export default function Index() {
       <ScrollView
         contentContainerStyle={[
           styles.contentContainer,
-          { paddingBottom: insets.bottom + 40 },
+          { paddingBottom: insets.bottom + 120 },
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
