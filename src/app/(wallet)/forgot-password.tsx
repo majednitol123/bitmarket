@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
-import { Alert, View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import {
+  Alert,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+} from "react-native";
 import { useTheme } from "styled-components/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
@@ -10,14 +18,25 @@ import { AppDispatch, RootState } from "../../store";
 import {
   resetWalletPassword,
   clearResetState,
+  recordFailedVerification,
 } from "../../store/biometricsSlice";
 import { LinearGradientBackground } from "../(app)/_layout";
 import Button from "../../components/Button/Button";
 import { ROUTES } from "../../constants/routes";
 import { MotiView } from "moti";
-import LockIcon from "../../assets/svg/lock.svg";
-import KeyIcon from "../../assets/svg/key.svg";
-import { ChevronLeftIcon } from "../../components/Icons/AppIcons";
+import {
+  LockIcon,
+  ShieldCheckIcon,
+  ChevronLeftIcon,
+  CheckCircleIcon,
+  HelpCircleIcon,
+} from "../../components/Icons/AppIcons";
+import {
+  getRandomQuestionsForVerification,
+  verifySecurityAnswers,
+  hasSecurityQuestions,
+  SecurityQuestionView,
+} from "../../services/securityQuestionsService";
 
 export default function ForgotPasswordScreen() {
   const theme = useTheme() as ThemeType;
@@ -27,16 +46,54 @@ export default function ForgotPasswordScreen() {
   const { unlocked, errorMessage, status, resetAttempts, resetLockedUntil } =
     useSelector((state: RootState) => state.biometrics);
 
-  const [seedPhrase, setSeedPhrase] = useState("");
+  // Wizard state: "questions" -> "password"
+  const [step, setStep] = useState<"questions" | "password">("questions");
+
+  // Questions verification state
+  const [randomQuestions, setRandomQuestions] = useState<SecurityQuestionView[]>([]);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [focusedQuestionId, setFocusedQuestionId] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [questionsLoaded, setQuestionsLoaded] = useState(false);
+  const [hasConfiguredQuestions, setHasConfiguredQuestions] = useState(true);
+
+  // New password state
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [step, setStep] = useState<"phrase" | "password">("phrase");
-  const [lockdownSeconds, setLockdownSeconds] = useState(0);
-
-  // Focus state for inputs
-  const [isFocusedPhrase, setFocusedPhrase] = useState(false);
   const [isFocusedPw1, setFocusedPw1] = useState(false);
   const [isFocusedPw2, setFocusedPw2] = useState(false);
+
+  // Lockout countdown timer
+  const [lockdownSeconds, setLockdownSeconds] = useState(0);
+
+  // Load 3 random security questions on mount
+  const loadQuestions = useCallback(async () => {
+    try {
+      const hasQuestions = await hasSecurityQuestions();
+      setHasConfiguredQuestions(hasQuestions);
+
+      if (!hasQuestions) {
+        setQuestionsLoaded(true);
+        return;
+      }
+
+      const selected = await getRandomQuestionsForVerification(3);
+      setRandomQuestions(selected);
+      const initialAnswers: Record<string, string> = {};
+      selected.forEach((q) => {
+        initialAnswers[q.id] = "";
+      });
+      setAnswers(initialAnswers);
+    } catch (err) {
+      console.warn("Failed to load security questions for verification:", err);
+    } finally {
+      setQuestionsLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadQuestions();
+  }, [loadQuestions]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -82,52 +139,69 @@ export default function ForgotPasswordScreen() {
   const strengthColors = ["transparent", "#ff5252", "#ffb74d", "#66bb6a"];
 
   const isLocked = lockdownSeconds > 0;
-  const isLoading = status === "loading";
+  const isLoading = status === "loading" || isVerifying;
 
+  const handleAnswerChange = (id: string, text: string) => {
+    setAnswers((prev) => ({
+      ...prev,
+      [id]: text,
+    }));
+  };
+
+  // ─── Step 1 Verification ───
+  const handleVerifyAnswers = async () => {
+    if (isLocked) return;
+
+    // Ensure all 3 questions have non-empty answers
+    for (let i = 0; i < randomQuestions.length; i++) {
+      const q = randomQuestions[i];
+      const ans = (answers[q.id] || "").trim();
+      if (!ans) {
+        Alert.alert(
+          "Incomplete Answers",
+          `Please answer Question ${i + 1}: "${q.question}"`
+        );
+        return;
+      }
+    }
+
+    setIsVerifying(true);
+    try {
+      const isValid = await verifySecurityAnswers(answers);
+      if (isValid) {
+        dispatch(clearResetState());
+        setStep("password");
+      } else {
+        dispatch(recordFailedVerification("One or more answers are incorrect. Please try again."));
+      }
+    } catch (err: any) {
+      Alert.alert("Verification Error", err.message || "Failed to verify answers.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // ─── Step 2 New Password Submission ───
   const handleResetPassword = useCallback(() => {
     if (isLocked) return;
 
-    // Step 1: Validate seed phrase input
-    if (step === "phrase") {
-      const trimmed = seedPhrase.trim();
-      if (!trimmed) {
-        Alert.alert("Error", "Please enter your recovery phrase.");
-        return;
-      }
-      const wordCount = trimmed.split(/\s+/).length;
-      if (wordCount !== 12 && wordCount !== 24) {
-        Alert.alert("Invalid Phrase", `Recovery phrase must be 12 or 24 words. You entered ${wordCount} words.`);
-        return;
-      }
-      // Move to password step
-      setStep("password");
-      return;
-    }
-
-    // Step 2: Validate new password
+    // Validate new password rules
     if (!newPassword || !confirmPassword) {
-      Alert.alert("Error", "Please fill in both password fields.");
+      Alert.alert("Error", "Please fill in both passcode fields.");
       return;
     }
     if (newPassword.length < 6) {
-      Alert.alert("Weak Password", "Password must be at least 6 characters.");
+      Alert.alert("Weak Passcode", "Passcode must be at least 6 characters.");
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert("Mismatch", "Passwords do not match.");
+      Alert.alert("Mismatch", "Passcodes do not match.");
       return;
     }
 
-    // Dispatch reset
-    dispatch(resetWalletPassword({ seedPhrase: seedPhrase.trim(), newPassword }));
-  }, [seedPhrase, newPassword, confirmPassword, step, isLocked, dispatch]);
-
-  const handleBackToPhrase = useCallback(() => {
-    setStep("phrase");
-    setNewPassword("");
-    setConfirmPassword("");
-    dispatch(clearResetState());
-  }, [dispatch]);
+    // Dispatch password reset (updates password without modifying security questions)
+    dispatch(resetWalletPassword({ newPassword }));
+  }, [newPassword, confirmPassword, isLocked, dispatch]);
 
   const formatLockdownTime = (seconds: number) => {
     if (seconds >= 60) {
@@ -141,13 +215,18 @@ export default function ForgotPasswordScreen() {
   return (
     <LinearGradientBackground colors={theme.colors.primaryLinearGradient}>
       <SafeAreaView style={styles.container}>
-        {/* Back Button */}
+        {/* Header Row */}
         <View style={styles.headerRow}>
           <TouchableOpacity
             activeOpacity={0.7}
             style={styles.backButton}
             onPress={() => {
-              if (router.canGoBack()) {
+              if (step === "password") {
+                setStep("questions");
+                setNewPassword("");
+                setConfirmPassword("");
+                dispatch(clearResetState());
+              } else if (router.canGoBack()) {
                 router.back();
               } else {
                 router.replace(ROUTES.unlock);
@@ -157,6 +236,14 @@ export default function ForgotPasswordScreen() {
           >
             <ChevronLeftIcon size={20} color={theme.colors.white} strokeWidth={2.2} />
           </TouchableOpacity>
+
+          <View style={styles.stepBadge}>
+            <Text style={styles.stepBadgeText}>
+              {step === "password"
+                ? "Step 2 of 2: New Passcode"
+                : "Step 1 of 2: Security Verification"}
+            </Text>
+          </View>
         </View>
 
         <KeyboardAwareScrollView
@@ -166,7 +253,7 @@ export default function ForgotPasswordScreen() {
           bottomOffset={60}
         >
           <View style={styles.card}>
-            {/* Header */}
+            {/* Header Block */}
             <MotiView
               from={{ opacity: 0, translateY: -16 }}
               animate={{ opacity: 1, translateY: 0 }}
@@ -174,17 +261,25 @@ export default function ForgotPasswordScreen() {
               style={{ alignItems: "center" }}
             >
               <View style={styles.iconCircle}>
-                <KeyIcon color={theme.colors.primary} width={32} height={32} />
+                {step === "password" ? (
+                  <LockIcon size={30} color={theme.colors.primary} />
+                ) : (
+                  <ShieldCheckIcon size={30} color={theme.colors.primary} />
+                )}
               </View>
-              <Text style={styles.title}>Reset Passcode</Text>
+              <Text style={styles.title}>
+                {step === "password" ? "Create New Passcode" : "Security Verification"}
+              </Text>
               <Text style={styles.subtitle}>
-                {step === "phrase"
-                  ? "Enter your 12 or 24-word recovery phrase to verify authorization."
-                  : "Create a new passcode to protect BitMarket."}
+                {step === "password"
+                  ? "Enter and confirm your new passcode to unlock BitMarket."
+                  : hasConfiguredQuestions
+                  ? "Answer the 3 security questions below to verify your identity."
+                  : "No security questions were configured for this wallet."}
               </Text>
             </MotiView>
 
-            {/* Form */}
+            {/* Form Block */}
             <MotiView
               from={{ opacity: 0, translateY: 16 }}
               animate={{ opacity: 1, translateY: 0 }}
@@ -222,76 +317,130 @@ export default function ForgotPasswordScreen() {
                 </MotiView>
               ) : null}
 
-              {step === "phrase" ? (
-                /* ─── Step 1: Seed Phrase Input ─── */
+              {!questionsLoaded ? (
+                <View style={{ paddingVertical: 32, alignItems: "center" }}>
+                  <ActivityIndicator size="large" color={theme.colors.primary} />
+                </View>
+              ) : step === "questions" && hasConfiguredQuestions ? (
+                /* ─── Step 1: 3 Random Security Questions ─── */
                 <View>
-                  <MotiView
-                    animate={{
-                      borderColor: isFocusedPhrase ? "rgba(139, 92, 246, 0.85)" : "rgba(139, 92, 246, 0.25)",
-                      backgroundColor: theme.colors.dark,
-                    }}
-                    transition={{ type: "timing", duration: 200 }}
-                    style={styles.phraseInputWrapper}
-                  >
-                    <TextInput
-                      style={styles.phraseInput}
-                      multiline
-                      placeholder="Enter your recovery phrase (12 or 24 words separated by spaces)"
-                      placeholderTextColor={theme.colors.lightGrey}
-                      value={seedPhrase}
-                      onChangeText={setSeedPhrase}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      onFocus={() => setFocusedPhrase(true)}
-                      onBlur={() => setFocusedPhrase(false)}
-                      editable={!isLocked}
-                    />
-                  </MotiView>
+                  {randomQuestions.map((q, index) => {
+                    const isFocused = focusedQuestionId === q.id;
+                    const hasAnswer = (answers[q.id] || "").trim().length > 0;
 
-                  {seedPhrase.trim().length > 0 && (
-                    <Text style={styles.wordCount}>
-                      {seedPhrase.trim().split(/\s+/).length} words entered
-                    </Text>
-                  )}
+                    return (
+                      <View key={q.id} style={styles.questionBlock}>
+                        <View style={styles.questionLabelRow}>
+                          <View
+                            style={[
+                              styles.questionBadge,
+                              {
+                                backgroundColor: hasAnswer
+                                  ? "rgba(16, 185, 129, 0.18)"
+                                  : "rgba(139, 92, 246, 0.15)",
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.questionBadgeText,
+                                {
+                                  color: hasAnswer ? "#10B981" : theme.colors.primaryLight,
+                                },
+                              ]}
+                            >
+                              {index + 1}
+                            </Text>
+                          </View>
+                          <Text style={styles.questionText}>{q.question}</Text>
+                        </View>
 
-                  {/* Security notice */}
-                  <View style={styles.warningContainer}>
-                    <LockIcon color={theme.colors.primary} width={16} height={16} />
-                    <Text style={styles.warningText}>
-                      Your phrase is verified locally and never leaves this device.
-                    </Text>
-                  </View>
+                        <MotiView
+                          animate={{
+                            borderColor: isFocused
+                              ? "rgba(139, 92, 246, 0.85)"
+                              : hasAnswer
+                              ? "rgba(16, 185, 129, 0.4)"
+                              : "rgba(139, 92, 246, 0.25)",
+                            backgroundColor: theme.colors.dark,
+                          }}
+                          transition={{ type: "timing", duration: 200 }}
+                          style={styles.inputWrapper}
+                        >
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Type your answer"
+                            placeholderTextColor={theme.colors.lightGrey}
+                            value={answers[q.id] || ""}
+                            onChangeText={(text) => handleAnswerChange(q.id, text)}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            onFocus={() => setFocusedQuestionId(q.id)}
+                            onBlur={() => setFocusedQuestionId(null)}
+                            editable={!isLocked}
+                            returnKeyType={index === randomQuestions.length - 1 ? "done" : "next"}
+                          />
+                          {hasAnswer && (
+                            <View style={{ marginLeft: 8 }}>
+                              <CheckCircleIcon size={18} color="#10B981" />
+                            </View>
+                          )}
+                        </MotiView>
+                      </View>
+                    );
+                  })}
 
                   <View style={styles.buttonWrapper}>
                     <Button
-                      title="Continue"
+                      title={isVerifying ? "Verifying Answers..." : "Verify Answers"}
+                      backgroundColor={theme.colors.primary}
                       color={theme.colors.realWhite}
-                      onPress={handleResetPassword}
-                      disabled={isLocked}
+                      onPress={handleVerifyAnswers}
+                      disabled={isLocked || isVerifying}
                     />
                   </View>
                 </View>
-              ) : (
-                /* ─── Step 2: New Password ─── */
+              ) : step === "questions" && !hasConfiguredQuestions ? (
+                /* No security questions configured */
                 <View>
+                  <View style={styles.warningBox}>
+                    <HelpCircleIcon size={20} color={theme.colors.primaryLight} />
+                    <Text style={styles.warningBoxText}>
+                      Security questions were not configured for this wallet. Security recovery is unavailable.
+                    </Text>
+                  </View>
+
+                  <Button
+                    title="Back to Unlock"
+                    backgroundColor={theme.colors.primary}
+                    color={theme.colors.realWhite}
+                    onPress={() => router.replace(ROUTES.unlock)}
+                  />
+                </View>
+              ) : (
+                /* ─── Step 2: Create New Passcode ─── */
+                <View>
+                  {/* New Password */}
                   <MotiView
                     animate={{
-                      borderColor: isFocusedPw1 ? "rgba(139, 92, 246, 0.85)" : "rgba(139, 92, 246, 0.25)",
+                      borderColor: isFocusedPw1
+                        ? "rgba(139, 92, 246, 0.85)"
+                        : "rgba(139, 92, 246, 0.25)",
                       backgroundColor: theme.colors.dark,
                     }}
                     transition={{ type: "timing", duration: 200 }}
                     style={styles.inputWrapper}
                   >
-                    <KeyIcon
-                      color={isFocusedPw1 ? theme.colors.primaryLight : theme.colors.lightGrey}
-                      width={20}
-                      height={20}
-                      style={{ marginRight: 12 }}
-                    />
+                    <View style={{ marginRight: 10 }}>
+                      <LockIcon
+                        size={18}
+                        color={isFocusedPw1 ? theme.colors.primaryLight : theme.colors.lightGrey}
+                      />
+                    </View>
                     <TextInput
                       style={styles.input}
                       secureTextEntry
-                      placeholder="New password"
+                      placeholder="New passcode (min 6 characters)"
                       placeholderTextColor={theme.colors.lightGrey}
                       value={newPassword}
                       onChangeText={setNewPassword}
@@ -301,6 +450,7 @@ export default function ForgotPasswordScreen() {
                     />
                   </MotiView>
 
+                  {/* Strength Bar */}
                   {newPassword.length > 0 && (
                     <View style={{ marginBottom: 16 }}>
                       <View style={styles.strengthContainer}>
@@ -325,24 +475,27 @@ export default function ForgotPasswordScreen() {
                     </View>
                   )}
 
+                  {/* Confirm New Password */}
                   <MotiView
                     animate={{
-                      borderColor: isFocusedPw2 ? "rgba(139, 92, 246, 0.85)" : "rgba(139, 92, 246, 0.25)",
+                      borderColor: isFocusedPw2
+                        ? "rgba(139, 92, 246, 0.85)"
+                        : "rgba(139, 92, 246, 0.25)",
                       backgroundColor: theme.colors.dark,
                     }}
                     transition={{ type: "timing", duration: 200 }}
                     style={styles.inputWrapper}
                   >
-                    <KeyIcon
-                      color={isFocusedPw2 ? theme.colors.primaryLight : theme.colors.lightGrey}
-                      width={20}
-                      height={20}
-                      style={{ marginRight: 12 }}
-                    />
+                    <View style={{ marginRight: 10 }}>
+                      <LockIcon
+                        size={18}
+                        color={isFocusedPw2 ? theme.colors.primaryLight : theme.colors.lightGrey}
+                      />
+                    </View>
                     <TextInput
                       style={styles.input}
                       secureTextEntry
-                      placeholder="Confirm new password"
+                      placeholder="Confirm new passcode"
                       placeholderTextColor={theme.colors.lightGrey}
                       value={confirmPassword}
                       onChangeText={setConfirmPassword}
@@ -355,7 +508,7 @@ export default function ForgotPasswordScreen() {
 
                   <View style={styles.buttonWrapper}>
                     <Button
-                      title="Reset Password"
+                      title="Update Passcode"
                       backgroundColor={theme.colors.primary}
                       color={theme.colors.realWhite}
                       onPress={handleResetPassword}
@@ -363,18 +516,10 @@ export default function ForgotPasswordScreen() {
                       disabled={isLocked}
                     />
                   </View>
-
-                  {/* Back to phrase step */}
-                  <TouchableOpacity
-                    style={styles.backLink}
-                    onPress={handleBackToPhrase}
-                  >
-                    <Text style={styles.backLinkText}>← Edit recovery phrase</Text>
-                  </TouchableOpacity>
                 </View>
               )}
 
-              {/* Attempt counter (shown after failures) */}
+              {/* Attempt Counter */}
               {resetAttempts > 0 && !isLocked && (
                 <Text style={styles.attemptText}>
                   {resetAttempts} failed attempt{resetAttempts > 1 ? "s" : ""}
@@ -399,6 +544,7 @@ function createStyles(theme: ThemeType) {
       marginBottom: 16,
       flexDirection: "row",
       alignItems: "center",
+      justifyContent: "space-between",
     },
     backButton: {
       width: 42,
@@ -410,11 +556,24 @@ function createStyles(theme: ThemeType) {
       justifyContent: "center",
       alignItems: "center",
     },
+    stepBadge: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 20,
+      borderWidth: 1,
+      backgroundColor: "rgba(139, 92, 246, 0.15)",
+      borderColor: "rgba(139, 92, 246, 0.3)",
+    },
+    stepBadgeText: {
+      fontSize: 12,
+      fontFamily: theme.fonts.families.openBold,
+      color: theme.colors.primaryLight,
+    },
     card: {
       backgroundColor: theme.colors.cardBackground,
       borderRadius: 24,
-      padding: 28,
-      paddingHorizontal: 22,
+      padding: 26,
+      paddingHorizontal: 20,
       borderWidth: 1,
       borderColor: theme.colors.border,
       width: "100%",
@@ -428,12 +587,12 @@ function createStyles(theme: ThemeType) {
       borderColor: "rgba(139, 92, 246, 0.25)",
       justifyContent: "center",
       alignItems: "center",
-      marginBottom: 20,
+      marginBottom: 18,
       alignSelf: "center",
     },
     title: {
       fontFamily: theme.fonts.families.openBold,
-      fontSize: 24,
+      fontSize: 22,
       color: theme.colors.white,
       textAlign: "center",
       marginBottom: 8,
@@ -443,69 +602,69 @@ function createStyles(theme: ThemeType) {
       fontSize: parseFloat(theme.fonts.sizes.normal as string),
       color: theme.colors.lightGrey,
       textAlign: "center",
-      marginBottom: 28,
+      marginBottom: 24,
       lineHeight: 22,
     },
-    phraseInputWrapper: {
-      backgroundColor: theme.colors.dark,
-      borderRadius: 16,
-      borderWidth: 1.5,
-      borderColor: "rgba(139, 92, 246, 0.25)",
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      marginBottom: 12,
-      minHeight: 120,
+    questionBlock: {
+      marginBottom: 14,
     },
-    phraseInput: {
-      color: theme.colors.white,
-      fontFamily: theme.fonts.families.openRegular,
-      fontSize: parseFloat(theme.fonts.sizes.normal as string),
-      lineHeight: 24,
-      textAlignVertical: "top",
-    },
-    wordCount: {
-      fontFamily: theme.fonts.families.openRegular,
-      fontSize: parseFloat(theme.fonts.sizes.small as string),
-      color: theme.colors.lightGrey,
-      textAlign: "right",
-      marginBottom: 12,
-    },
-    warningContainer: {
+    questionLabelRow: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: "rgba(139, 92, 246, 0.1)",
-      borderWidth: 1,
-      borderColor: "rgba(139, 92, 246, 0.2)",
-      borderRadius: 10,
-      paddingVertical: 10,
-      paddingHorizontal: 14,
-      marginBottom: 20,
+      marginBottom: 8,
       gap: 10,
     },
-    warningText: {
-      fontFamily: theme.fonts.families.openRegular,
-      fontSize: parseFloat(theme.fonts.sizes.small as string),
-      color: theme.colors.primaryLight,
+    questionBadge: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    questionBadgeText: {
+      fontSize: 12,
+      fontFamily: theme.fonts.families.openBold,
+    },
+    questionText: {
+      fontSize: 14,
+      fontFamily: theme.fonts.families.openBold,
+      color: theme.colors.white,
       flex: 1,
-      lineHeight: 18,
     },
     inputWrapper: {
       backgroundColor: theme.colors.dark,
-      borderRadius: 16,
+      borderRadius: 14,
       borderWidth: 1.5,
       borderColor: theme.colors.border,
-      paddingHorizontal: 16,
-      marginBottom: 16,
+      paddingHorizontal: 14,
       flexDirection: "row",
       alignItems: "center",
-      height: 54,
+      height: 52,
     },
     input: {
       flex: 1,
       color: theme.colors.white,
       fontFamily: theme.fonts.families.openRegular,
       fontSize: parseFloat(theme.fonts.sizes.normal as string),
-      height: 54,
+      height: 52,
+    },
+    warningBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "rgba(139, 92, 246, 0.1)",
+      borderWidth: 1,
+      borderColor: "rgba(139, 92, 246, 0.25)",
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 20,
+      gap: 12,
+    },
+    warningBoxText: {
+      fontSize: 13,
+      fontFamily: theme.fonts.families.openRegular,
+      color: theme.colors.primaryLight,
+      flex: 1,
+      lineHeight: 18,
     },
     strengthContainer: {
       flexDirection: "row",
@@ -523,7 +682,7 @@ function createStyles(theme: ThemeType) {
       textAlign: "right",
     },
     buttonWrapper: {
-      marginTop: 8,
+      marginTop: 12,
     },
     errorContainer: {
       flexDirection: "row",
@@ -570,17 +729,6 @@ function createStyles(theme: ThemeType) {
       fontFamily: theme.fonts.families.openRegular,
       fontSize: parseFloat(theme.fonts.sizes.small as string),
       color: "#ffb74d",
-    },
-    backLink: {
-      alignItems: "center",
-      marginTop: 16,
-      padding: 8,
-    },
-    backLinkText: {
-      fontFamily: theme.fonts.families.openRegular,
-      fontSize: parseFloat(theme.fonts.sizes.small as string),
-      color: theme.colors.lightGrey,
-      textDecorationLine: "underline",
     },
     attemptText: {
       fontFamily: theme.fonts.families.openRegular,

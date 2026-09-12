@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import { REHYDRATE } from "redux-persist";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
+import { clearSecurityQuestions } from "../services/securityQuestionsService";
 import { RootState } from ".";
 
 // ─── Secure Storage Keys ───
@@ -259,6 +260,21 @@ const lockSlice = createSlice({
       SecureStore.deleteItemAsync(PASSWORD_KEY).catch(() => {});
       SecureStore.deleteItemAsync(UNLOCKED_AT_KEY).catch(() => {});
       SecureStore.deleteItemAsync(BIOMETRIC_PREF_KEY).catch(() => {});
+      clearSecurityQuestions().catch(() => {});
+    },
+
+    /** Record failed verification attempt and calculate lockout time */
+    recordFailedVerification(state, action: PayloadAction<string | undefined>) {
+      state.status = "rejected";
+      state.errorMessage = action.payload || "Incorrect answer(s). Please try again.";
+      state.resetAttempts += 1;
+      if (state.resetAttempts >= 5) {
+        state.resetLockedUntil = Date.now() + 5 * 60 * 1000; // 5 minutes
+      } else if (state.resetAttempts >= 4) {
+        state.resetLockedUntil = Date.now() + 60 * 1000; // 60 seconds
+      } else if (state.resetAttempts >= 3) {
+        state.resetLockedUntil = Date.now() + 30 * 1000; // 30 seconds
+      }
     },
 
     /** Clear reset attempt counter */
@@ -398,6 +414,7 @@ export const {
   clearAuthError,
   resetLockState,
   clearResetState,
+  recordFailedVerification,
 } = lockSlice.actions;
 
 export default lockSlice.reducer;
