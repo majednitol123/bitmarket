@@ -3,7 +3,9 @@ import cors from 'cors';
 import { config } from './config/env';
 import { initRedis, closeRedis, isRedisConnected } from './config/redis';
 import { initDatabase, closeDatabase, isDatabaseConnected } from './config/database';
+import { runMigrations } from './db/runMigrations';
 import marketRoutes from './modules/market/market.routes';
+import portfolioRoutes from './modules/portfolio/portfolio.routes';
 import { errorHandler, AppError } from './middleware/errorHandler';
 
 const app = express();
@@ -34,8 +36,9 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Market API Routes
+// API Routes
 app.use('/api/market', marketRoutes);
+app.use('/api/portfolio', portfolioRoutes);
 
 // 404 handler
 app.use((req, res, next) => {
@@ -47,19 +50,20 @@ app.use(errorHandler);
 
 // Start server
 async function startServer() {
-  console.log('--- Starting Market Data Backend ---');
+  console.log('--- Starting Crypto Aggregator Backend ---');
   console.log(`Environment: Node ${process.version}`);
   console.log(`Port: ${config.port}`);
 
   // Initialize infrastructure services (non-blocking)
   await initRedis();
   await initDatabase();
+  await runMigrations();
 
   const server = app.listen(config.port, () => {
-    console.log(`🚀 Market Data API Server running on http://localhost:${config.port}`);
+    console.log(`🚀 Crypto Aggregator API Server running on http://localhost:${config.port}`);
     console.log(`Health check: http://localhost:${config.port}/health`);
     console.log(`Market overview: http://localhost:${config.port}/api/market/overview`);
-    console.log(`Market tokens: http://localhost:${config.port}/api/market/tokens`);
+    console.log(`Portfolio: http://localhost:${config.port}/api/portfolio/:chain/:address`);
   });
 
   // Graceful shutdown

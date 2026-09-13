@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { MarketDataProvider } from './MarketDataProvider';
+import { PortfolioDataProvider } from './PortfolioDataProvider';
 import {
   MarketOverview,
   MarketToken,
@@ -16,7 +17,7 @@ import {
 import { config } from '../config/env';
 import { AppError } from '../middleware/errorHandler';
 
-export class CoinStatsProvider implements MarketDataProvider {
+export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvider {
   private client: AxiosInstance;
 
   constructor() {
@@ -157,6 +158,90 @@ export class CoinStatsProvider implements MarketDataProvider {
         `Failed to search coins from provider: ${err.message}`,
         err.response?.status || 502,
         'PROVIDER_SEARCH_ERROR'
+      );
+    }
+  }
+
+  async getWalletBalance(blockchain: string, address: string): Promise<any[]> {
+    if (!blockchain || !address) {
+      throw new AppError('blockchain and address are required', 400, 'INVALID_PARAMS');
+    }
+
+    try {
+      const response = await this.client.get('/wallet/balance', {
+        params: {
+          blockchain,
+          address,
+        },
+      });
+
+      const raw = response.data;
+      if (Array.isArray(raw)) {
+        return raw;
+      }
+      if (raw?.result && Array.isArray(raw.result)) {
+        return raw.result;
+      }
+      if (raw?.coins && Array.isArray(raw.coins)) {
+        return raw.coins;
+      }
+      return [];
+    } catch (err: any) {
+      console.error(`[CoinStatsProvider] Error fetching wallet balance (${blockchain}:${address}):`, err.message);
+      if (err.response?.status === 404) {
+        return [];
+      }
+      throw new AppError(
+        `Failed to fetch wallet balance: ${err.message}`,
+        err.response?.status || 502,
+        'PROVIDER_WALLET_BALANCE_ERROR'
+      );
+    }
+  }
+
+  async getWalletTransactions(
+    blockchain: string,
+    address: string,
+    page: number = 1,
+    limit: number = 20
+  ): Promise<{ result: any[]; meta?: any }> {
+    if (!blockchain || !address) {
+      throw new AppError('blockchain and address are required', 400, 'INVALID_PARAMS');
+    }
+
+    try {
+      const response = await this.client.get('/wallet/transactions', {
+        params: {
+          blockchain,
+          address,
+          page,
+          limit,
+        },
+      });
+
+      const raw = response.data;
+      const result = Array.isArray(raw?.result)
+        ? raw.result
+        : Array.isArray(raw)
+        ? raw
+        : [];
+
+      return {
+        result,
+        meta: raw?.meta || { page, limit, hasNextPage: result.length >= limit },
+      };
+    } catch (err: any) {
+      console.error(
+        `[CoinStatsProvider] Error fetching wallet transactions (${blockchain}:${address}):`,
+        err.message
+      );
+      if (err.response?.status === 404) {
+        return { result: [], meta: { page, limit, hasNextPage: false } };
+      }
+      throw new AppError(
+        `Failed to fetch wallet transactions: ${err.message}`,
+        err.response?.status || 502,
+        'PROVIDER_WALLET_TRANSACTIONS_ERROR'
       );
     }
   }

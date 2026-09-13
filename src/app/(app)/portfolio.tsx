@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,21 +6,28 @@ import {
   ScrollView,
   RefreshControl,
   StyleSheet,
-  Platform,
+  ActivityIndicator,
+  Linking,
 } from "react-native";
 import { useTheme } from "styled-components/native";
 import { useSafeAreaInsets, EdgeInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAccount, useAppKit } from "@reown/appkit-react-native";
+import { useDispatch, useSelector } from "react-redux";
+
 import type { ThemeType } from "../../styles/theme";
+import type { RootState, AppDispatch } from "../../store";
 import { SafeAreaContainer } from "../../components/Styles/Layout.styles";
 import Header from "../../components/Header/Header";
 import { BlockchainIcon } from "../../components/BlockchainIcon/BlockchainIcon";
 import { ChainSelectorModal } from "../../components/ChainSelectorModal/ChainSelectorModal";
 import { CHAINS, type Chain } from "../../constants/tokenRegistry";
 
-import { PortfolioChart, Timeframe, TIMEFRAME_DATA } from "../../components/PortfolioChart/PortfolioChart";
+import {
+  PortfolioChart,
+  Timeframe,
+} from "../../components/PortfolioChart/PortfolioChart";
 import {
   SwapIcon,
   CoinsIcon,
@@ -28,226 +35,166 @@ import {
   HistoryIcon,
 } from "../../components/Icons/AppIcons";
 
+import {
+  fetchPortfolio,
+  fetchPortfolioChart,
+  fetchPortfolioTransactions,
+  fetchSwapHistory,
+  refreshPortfolio,
+  setSelectedTimeframe,
+  setSelectedChain,
+  selectPortfolioSummary,
+  selectPortfolioHoldings,
+  selectPortfolioChartData,
+  selectPortfolioTransactions,
+  selectSwapHistory,
+  selectPortfolioDefi,
+  selectPortfolioStatus,
+  selectPortfolioRefreshing,
+  selectPortfolioSelectedTimeframe,
+} from "../../store/portfolioSlice";
+
 type TabType = "tokens" | "defi" | "activity";
 
-interface TokenHolding {
-  symbol: string;
-  name: string;
-  chain: string;
-  balance: string;
-  price: string;
-  valueUsd: string;
-  change24h: number;
-  icon?: string;
-}
-
-interface DeFiPosition {
-  protocol: string;
-  pool: string;
-  type: string;
-  deposited: string;
-  apy: string;
-  earnings: string;
-  chain: string;
-  icon?: string;
-}
-
-interface SwapActivityItem {
-  id: string;
-  fromToken: string;
-  toToken: string;
-  fromAmount: string;
-  toAmount: string;
-  timestamp: string;
-  status: "Completed" | "Pending";
-  dex: string;
-  hash: string;
-}
-
 const TIMEFRAMES: Timeframe[] = ["1D", "1W", "1M", "1Y", "ALL"];
-
-const HOLDINGS: TokenHolding[] = [
-  {
-    symbol: "ETH",
-    name: "Ethereum",
-    chain: "Ethereum",
-    balance: "2.45 ETH",
-    price: "$2,642.50",
-    valueUsd: "$6,474.12",
-    change24h: 3.42,
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
-  },
-  {
-    symbol: "USDC",
-    name: "USD Coin",
-    chain: "Ethereum",
-    balance: "4,250.00 USDC",
-    price: "$1.00",
-    valueUsd: "$4,250.00",
-    change24h: 0.01,
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48/logo.png",
-  },
-  {
-    symbol: "SOL",
-    name: "Solana",
-    chain: "Solana",
-    balance: "12.80 SOL",
-    price: "$138.45",
-    valueUsd: "$1,772.16",
-    change24h: 6.84,
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png",
-  },
-  {
-    symbol: "ARB",
-    name: "Arbitrum",
-    chain: "Arbitrum",
-    balance: "1,850.00 ARB",
-    price: "$0.58",
-    valueUsd: "$1,073.00",
-    change24h: 4.12,
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png",
-  },
-  {
-    symbol: "OP",
-    name: "Optimism",
-    chain: "Optimism",
-    balance: "680.00 OP",
-    price: "$1.45",
-    valueUsd: "$986.00",
-    change24h: 5.62,
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png",
-  },
-  {
-    symbol: "UNI",
-    name: "Uniswap",
-    chain: "Ethereum",
-    balance: "36.50 UNI",
-    price: "$7.85",
-    valueUsd: "$286.52",
-    change24h: -1.24,
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x1f9840a85d5af5bf1d1762f925bdaddc4201f984/logo.png",
-  },
-];
-
-const DEFI_POSITIONS: DeFiPosition[] = [
-  {
-    protocol: "Uniswap v3",
-    pool: "ETH / USDC (0.05%)",
-    type: "Liquidity Pool",
-    deposited: "$4,210.00",
-    apy: "18.4% APY",
-    earnings: "+$38.40 Unclaimed",
-    chain: "Ethereum",
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x1f9840a85d5af5bf1d1762f925bdaddc4201f984/logo.png",
-  },
-  {
-    protocol: "Aave v3",
-    pool: "USDC Supply",
-    type: "Lending Market",
-    deposited: "$3,500.00",
-    apy: "5.2% APY",
-    earnings: "+$14.20 Earned",
-    chain: "Arbitrum",
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9/logo.png",
-  },
-  {
-    protocol: "Lido",
-    pool: "Staked ETH (stETH)",
-    type: "Liquid Staking",
-    deposited: "$2,642.50",
-    apy: "3.4% APY",
-    earnings: "+0.012 stETH",
-    chain: "Ethereum",
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
-  },
-];
-
-const SWAP_ACTIVITIES: SwapActivityItem[] = [
-  {
-    id: "tx-1",
-    fromToken: "ETH",
-    toToken: "USDC",
-    fromAmount: "1.00 ETH",
-    toAmount: "2,642.50 USDC",
-    timestamp: "12 mins ago",
-    status: "Completed",
-    dex: "Uniswap v3 (Aggregated)",
-    hash: "0x8f3c...4a12",
-  },
-  {
-    id: "tx-2",
-    fromToken: "ARB",
-    toToken: "USDT",
-    fromAmount: "1,500 ARB",
-    toAmount: "870.00 USDT",
-    timestamp: "3 hours ago",
-    status: "Completed",
-    dex: "1inch Router",
-    hash: "0x3e11...9b77",
-  },
-  {
-    id: "tx-3",
-    fromToken: "OP",
-    toToken: "ETH",
-    fromAmount: "450 OP",
-    toAmount: "0.247 ETH",
-    timestamp: "1 day ago",
-    status: "Completed",
-    dex: "KyberSwap",
-    hash: "0x7a22...3c44",
-  },
-  {
-    id: "tx-4",
-    fromToken: "SOL",
-    toToken: "USDC",
-    fromAmount: "8.50 SOL",
-    toAmount: "1,176.82 USDC",
-    timestamp: "3 days ago",
-    status: "Completed",
-    dex: "Jupiter DEX",
-    hash: "0x11bb...88ee",
-  },
-];
 
 export default function PortfolioScreen() {
   const theme = useTheme() as ThemeType;
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(theme, insets), [theme, insets]);
+  const dispatch = useDispatch<AppDispatch>();
 
-  const [selectedChain, setSelectedChain] = useState<Chain>(CHAINS[0]);
+  const { isConnected, address: appKitAddress } = useAccount();
+  const { open } = useAppKit();
+
+  // Check for internal wallet address if appKitAddress not present
+  const internalAddress = useSelector((state: RootState) => {
+    const eth = state.ethereum;
+    return eth?.globalAddresses?.[eth?.activeIndex ?? 0]?.address;
+  });
+
+  const activeAddress = appKitAddress || internalAddress || null;
+
+  // Redux portfolio selectors
+  const summary = useSelector(selectPortfolioSummary);
+  const holdings = useSelector(selectPortfolioHoldings);
+  const reduxTimeframe = useSelector(selectPortfolioSelectedTimeframe) as Timeframe;
+  const chartData = useSelector(selectPortfolioChartData(reduxTimeframe));
+  const transactions = useSelector(selectPortfolioTransactions);
+  const swapHistory = useSelector(selectSwapHistory);
+  const defiPositions = useSelector(selectPortfolioDefi);
+  const status = useSelector(selectPortfolioStatus);
+  const isRefreshing = useSelector(selectPortfolioRefreshing);
+
+  const [selectedChainState, setSelectedChainState] = useState<Chain>(CHAINS[0]);
   const [chainModalVisible, setChainModalVisible] = useState(false);
-  const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>("1D");
   const [scrubPoint, setScrubPoint] = useState<{ time: string; value: number } | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("tokens");
-  const [refreshing, setRefreshing] = useState(false);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 800);
-  }, []);
+  // Fetch portfolio data when activeAddress or selectedChain changes
+  useEffect(() => {
+    if (activeAddress) {
+      dispatch(fetchPortfolio({ chain: selectedChainState.id, address: activeAddress }));
+      dispatch(fetchPortfolioChart({ chain: selectedChainState.id, address: activeAddress, range: reduxTimeframe }));
+      dispatch(fetchPortfolioTransactions({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
+      dispatch(fetchSwapHistory({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
+    }
+  }, [dispatch, activeAddress, selectedChainState.id, reduxTimeframe]);
 
-  const activeTimeframeInfo = TIMEFRAME_DATA[selectedTimeframe];
+  const onRefresh = useCallback(async () => {
+    if (activeAddress) {
+      await dispatch(refreshPortfolio({ chain: selectedChainState.id, address: activeAddress }));
+      dispatch(fetchPortfolioChart({ chain: selectedChainState.id, address: activeAddress, range: reduxTimeframe }));
+      dispatch(fetchPortfolioTransactions({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
+      dispatch(fetchSwapHistory({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
+    }
+  }, [dispatch, activeAddress, selectedChainState.id, reduxTimeframe]);
 
   const handleNavigateSwap = () => {
     router.replace("/(app)");
   };
 
+  const handleSelectChain = (chain: Chain) => {
+    setSelectedChainState(chain);
+    dispatch(setSelectedChain(chain.id));
+    setChainModalVisible(false);
+  };
+
+  const handleSelectTimeframe = (tf: Timeframe) => {
+    dispatch(setSelectedTimeframe(tf));
+    setScrubPoint(null);
+    if (activeAddress) {
+      dispatch(fetchPortfolioChart({ chain: selectedChainState.id, address: activeAddress, range: tf }));
+    }
+  };
+
+  const handleOpenExplorer = (url: string) => {
+    if (url) {
+      Linking.openURL(url).catch((err) => console.warn("Could not open explorer URL:", err));
+    }
+  };
+
+  // Balance display
+  const totalVal = summary?.totalValueUsd ?? 0;
   const displayBalance = scrubPoint
     ? `$${scrubPoint.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    : "$14,842.60";
+    : `$${totalVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const displayLabel = scrubPoint
     ? `Portfolio at ${scrubPoint.time}`
     : "Total Net Worth";
+
+  // PnL display — uses only real data, no mock fallback
+  const pnlText = useMemo(() => {
+    if (chartData?.pnl && chartData?.pnlPercent) {
+      return `${chartData.pnl} (${chartData.pnlPercent})`;
+    }
+    if (summary) {
+      const isPos = summary.change24hPercent >= 0;
+      const usdSign = isPos ? "+$" : "-$";
+      const pctSign = isPos ? "+" : "";
+      return `${usdSign}${Math.abs(summary.change24hUsd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${pctSign}${summary.change24hPercent.toFixed(2)}%)`;
+    }
+    return "$0.00 (0.00%)";
+  }, [chartData, summary]);
+
+  const isPositivePnl = chartData ? chartData.isPositive : (summary ? summary.change24hPercent >= 0 : true);
+
+  // Combined activities (app swap records + on-chain transactions)
+  const combinedActivities = useMemo(() => {
+    const swapItems = swapHistory.items.map((s) => ({
+      id: `swap-${s.id || s.txHash}`,
+      title: `${s.fromAmount || ""} ${s.fromTokenSymbol || ""} ➔ ${s.toAmount || ""} ${s.toTokenSymbol || ""}`.trim() || "Token Swap",
+      subtitle: s.router || "Aggregated Swap",
+      time: s.createdAt ? new Date(s.createdAt).toLocaleDateString() : "Recent",
+      hash: s.txHash,
+      status: s.status === "completed" ? "Completed" : s.status === "failed" ? "Failed" : "Pending",
+      isSwap: true,
+      explorerUrl: `https://etherscan.io/tx/${s.txHash}`,
+    }));
+
+    const txItems = transactions.items.map((t) => ({
+      id: t.id,
+      title: `${t.type.toUpperCase()}: ${t.amount}`,
+      subtitle: t.coinName || t.coinSymbol,
+      time: t.date ? new Date(t.date).toLocaleDateString() : "Recent",
+      hash: t.hash ? `${t.hash.slice(0, 6)}...${t.hash.slice(-4)}` : "",
+      status: "Completed",
+      isSwap: t.type === "swap",
+      explorerUrl: t.explorerUrl,
+    }));
+
+    return [...swapItems, ...txItems];
+  }, [swapHistory.items, transactions.items]);
+
+  const isLoadingInitial = status === "loading" && !summary;
 
   return (
     <SafeAreaContainer edges={["bottom", "left", "right"]}>
       <Header
         title="Portfolio"
         rightAction="network"
-        currentChainName={selectedChain.name}
+        currentChainName={selectedChainState.name}
         onOpenChainModal={() => setChainModalVisible(true)}
       />
 
@@ -260,42 +207,73 @@ export default function PortfolioScreen() {
         refreshControl={
           <RefreshControl
             tintColor={theme.colors.primary}
-            refreshing={refreshing}
+            refreshing={isRefreshing}
             onRefresh={onRefresh}
           />
         }
       >
+        {/* ═══ Wallet Connection Banner (if not connected) ═══ */}
+        {!activeAddress && (
+          <View style={styles.connectPromptCard}>
+            <Text style={styles.connectPromptTitle}>Connect Your Wallet</Text>
+            <Text style={styles.connectPromptSubtitle}>
+              Connect your Web3 wallet to track your real balances, tokens, and swap history.
+            </Text>
+            <TouchableOpacity style={styles.connectButton} onPress={() => open()} activeOpacity={0.85}>
+              <LinearGradient
+                colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.connectGradient}
+              >
+                <Text style={styles.connectButtonText}>Connect Wallet</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* ═══ Hero Net Worth Card ═══ */}
         <View style={styles.heroCard}>
           <View style={styles.heroTopRow}>
             <View>
               <Text style={styles.heroLabel}>{displayLabel}</Text>
-              <Text style={styles.heroBalance}>{displayBalance}</Text>
+              <Text style={styles.heroBalance}>
+                {isLoadingInitial ? "$---" : displayBalance}
+              </Text>
             </View>
-            <View style={styles.pnlBadge}>
-              <Text style={styles.pnlText}>
-                {activeTimeframeInfo.pnl} ({activeTimeframeInfo.pnlPercent})
+            <View
+              style={[
+                styles.pnlBadge,
+                !isPositivePnl && { backgroundColor: "rgba(239, 68, 68, 0.15)" },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.pnlText,
+                  !isPositivePnl && { color: "#EF4444" },
+                ]}
+              >
+                {isLoadingInitial ? "Loading..." : pnlText}
               </Text>
             </View>
           </View>
 
-          {/* High Precision Interactive Smooth Chart */}
+          {/* Interactive Chart */}
           <PortfolioChart
-            timeframe={selectedTimeframe}
+            timeframe={reduxTimeframe}
+            data={chartData}
+            isLoading={isLoadingInitial}
             onScrubChange={setScrubPoint}
           />
 
           {/* Timeframe Selector */}
           <View style={styles.timeframeRow}>
             {TIMEFRAMES.map((tf) => {
-              const isSelected = selectedTimeframe === tf;
+              const isSelected = reduxTimeframe === tf;
               return (
                 <TouchableOpacity
                   key={tf}
-                  onPress={() => {
-                    setSelectedTimeframe(tf);
-                    setScrubPoint(null);
-                  }}
+                  onPress={() => handleSelectTimeframe(tf)}
                   style={[
                     styles.tfPill,
                     isSelected && { backgroundColor: theme.colors.primary },
@@ -344,7 +322,7 @@ export default function PortfolioScreen() {
               strokeWidth={2}
             />
             <Text style={[styles.tabText, activeTab === "tokens" && styles.tabTextActive]}>
-              Holdings ({HOLDINGS.length})
+              Holdings ({holdings.length})
             </Text>
           </TouchableOpacity>
 
@@ -358,7 +336,7 @@ export default function PortfolioScreen() {
               strokeWidth={2}
             />
             <Text style={[styles.tabText, activeTab === "defi" && styles.tabTextActive]}>
-              DeFi Yield ({DEFI_POSITIONS.length})
+              DeFi Yield ({defiPositions.length})
             </Text>
           </TouchableOpacity>
 
@@ -372,7 +350,7 @@ export default function PortfolioScreen() {
               strokeWidth={2}
             />
             <Text style={[styles.tabText, activeTab === "activity" && styles.tabTextActive]}>
-              Swap History
+              Swap History ({combinedActivities.length})
             </Text>
           </TouchableOpacity>
         </View>
@@ -380,125 +358,177 @@ export default function PortfolioScreen() {
         {/* ═══ Tab 1: Tokens ═══ */}
         {activeTab === "tokens" && (
           <View style={styles.listCard}>
-            {HOLDINGS.map((token, idx) => {
-              const isPositive = token.change24h >= 0;
-              return (
-                <View
-                  key={token.symbol}
-                  style={[
-                    styles.tokenRow,
-                    idx < HOLDINGS.length - 1 && styles.rowDivider,
-                  ]}
+            {isLoadingInitial ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <Text style={styles.loadingText}>Loading wallet balances...</Text>
+              </View>
+            ) : holdings.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyTitle}>No Tokens Found</Text>
+                <Text style={styles.emptySubtitle}>
+                  No token balances detected for this address on {selectedChainState.name}.
+                </Text>
+                <TouchableOpacity
+                  style={styles.emptyActionButton}
+                  onPress={handleNavigateSwap}
+                  activeOpacity={0.85}
                 >
-                  <View style={styles.tokenLeft}>
-                    <BlockchainIcon symbol={token.symbol} size={36} logoUrl={token.icon} />
-                    <View>
-                      <View style={styles.symbolRow}>
-                        <Text style={styles.tokenSymbolText}>{token.symbol}</Text>
-                        <View style={styles.chainPill}>
-                          <Text style={styles.chainPillText}>{token.chain}</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.tokenBalanceText}>{token.balance}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.tokenMiddle}>
-                    <Text style={styles.tokenValueText}>{token.valueUsd}</Text>
-                    <Text
-                      style={[
-                        styles.tokenPriceText,
-                        { color: isPositive ? "#10B981" : "#EF4444" },
-                      ]}
-                    >
-                      {token.price} ({isPositive ? "+" : ""}
-                      {token.change24h}%)
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.tokenSwapBtn}
-                    onPress={handleNavigateSwap}
-                    activeOpacity={0.8}
+                  <Text style={styles.emptyActionText}>Get Tokens via Swap</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              holdings.map((token, idx) => {
+                const isPositive = token.change24hPercent >= 0;
+                return (
+                  <View
+                    key={token.id || token.symbol}
+                    style={[
+                      styles.tokenRow,
+                      idx < holdings.length - 1 && styles.rowDivider,
+                    ]}
                   >
-                    <LinearGradient
-                      colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.tokenSwapGradient}
+                    <View style={styles.tokenLeft}>
+                      <BlockchainIcon symbol={token.symbol} size={36} logoUrl={token.logoUrl} />
+                      <View style={{ flexShrink: 1 }}>
+                        <View style={styles.symbolRow}>
+                          <Text style={styles.tokenSymbolText}>{token.symbol}</Text>
+                          <View style={styles.chainPill}>
+                            <Text style={styles.chainPillText}>{token.allocationPercent}%</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.tokenBalanceText} numberOfLines={1}>
+                          {token.balance}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.tokenMiddle}>
+                      <Text style={styles.tokenValueText}>
+                        ${token.valueUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tokenPriceText,
+                          { color: isPositive ? "#10B981" : "#EF4444" },
+                        ]}
+                      >
+                        ${token.priceUsd < 0.01 ? token.priceUsd.toPrecision(3) : token.priceUsd.toFixed(2)} ({isPositive ? "+" : ""}
+                        {token.change24hPercent.toFixed(2)}%)
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.tokenSwapBtn}
+                      onPress={handleNavigateSwap}
+                      activeOpacity={0.8}
                     >
-                      <Text style={styles.tokenSwapBtnText}>Swap</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
+                      <LinearGradient
+                        colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.tokenSwapGradient}
+                      >
+                        <Text style={styles.tokenSwapBtnText}>Swap</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
+            )}
           </View>
         )}
 
         {/* ═══ Tab 2: DeFi Positions ═══ */}
         {activeTab === "defi" && (
           <View style={styles.listCard}>
-            {DEFI_POSITIONS.map((pos, idx) => (
-              <View
-                key={pos.pool}
-                style={[
-                  styles.tokenRow,
-                  idx < DEFI_POSITIONS.length - 1 && styles.rowDivider,
-                ]}
-              >
-                <View style={styles.tokenLeft}>
-                  <BlockchainIcon symbol={pos.protocol} size={36} logoUrl={pos.icon} />
-                  <View>
-                    <Text style={styles.tokenSymbolText}>{pos.protocol}</Text>
-                    <Text style={styles.defiPoolText}>{pos.pool}</Text>
-                    <Text style={styles.defiEarningsText}>{pos.earnings}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.tokenRight}>
-                  <Text style={styles.tokenValueText}>{pos.deposited}</Text>
-                  <View style={styles.apyBadge}>
-                    <Text style={styles.apyText}>{pos.apy}</Text>
-                  </View>
-                </View>
+            {defiPositions.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyTitle}>No Active DeFi Positions</Text>
+                <Text style={styles.emptySubtitle}>
+                  Liquidity pools, staking positions, and lending deposits on {selectedChainState.name} will appear here.
+                </Text>
               </View>
-            ))}
+            ) : (
+              defiPositions.map((pos, idx) => (
+                <View
+                  key={pos.pool}
+                  style={[
+                    styles.tokenRow,
+                    idx < defiPositions.length - 1 && styles.rowDivider,
+                  ]}
+                >
+                  <View style={styles.tokenLeft}>
+                    <BlockchainIcon symbol={pos.protocol} size={36} logoUrl={pos.icon} />
+                    <View>
+                      <Text style={styles.tokenSymbolText}>{pos.protocol}</Text>
+                      <Text style={styles.defiPoolText}>{pos.pool}</Text>
+                      <Text style={styles.defiEarningsText}>{pos.earnings}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.tokenRight}>
+                    <Text style={styles.tokenValueText}>{pos.deposited}</Text>
+                    <View style={styles.apyBadge}>
+                      <Text style={styles.apyText}>{pos.apy}</Text>
+                    </View>
+                  </View>
+                </View>
+              ))
+            )}
           </View>
         )}
 
         {/* ═══ Tab 3: Swap Activity History ═══ */}
         {activeTab === "activity" && (
           <View style={styles.listCard}>
-            {SWAP_ACTIVITIES.map((act, idx) => (
-              <View
-                key={act.id}
-                style={[
-                  styles.tokenRow,
-                  idx < SWAP_ACTIVITIES.length - 1 && styles.rowDivider,
-                ]}
-              >
-                <View style={styles.tokenLeft}>
-                  <View style={styles.activityIconBox}>
-                    <SwapIcon size={16} color={theme.colors.primaryLight} strokeWidth={2.2} />
-                  </View>
-                  <View>
-                    <Text style={styles.tokenSymbolText}>
-                      {act.fromAmount} ➔ {act.toAmount}
-                    </Text>
-                    <Text style={styles.activityDexText}>{act.dex}</Text>
-                    <Text style={styles.activityTimeText}>{act.timestamp} · {act.hash}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.tokenRight}>
-                  <View style={styles.completedBadge}>
-                    <View style={styles.greenDot} />
-                    <Text style={styles.completedText}>{act.status}</Text>
-                  </View>
-                </View>
+            {combinedActivities.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyTitle}>No Recent Activity</Text>
+                <Text style={styles.emptySubtitle}>
+                  Swaps and wallet transactions executed on {selectedChainState.name} will appear here.
+                </Text>
+                <TouchableOpacity
+                  style={styles.emptyActionButton}
+                  onPress={handleNavigateSwap}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.emptyActionText}>Start Swapping</Text>
+                </TouchableOpacity>
               </View>
-            ))}
+            ) : (
+              combinedActivities.map((act, idx) => (
+                <TouchableOpacity
+                  key={act.id}
+                  style={[
+                    styles.tokenRow,
+                    idx < combinedActivities.length - 1 && styles.rowDivider,
+                  ]}
+                  onPress={() => handleOpenExplorer(act.explorerUrl)}
+                  activeOpacity={act.explorerUrl ? 0.7 : 1}
+                >
+                  <View style={styles.tokenLeft}>
+                    <View style={styles.activityIconBox}>
+                      <SwapIcon size={16} color={theme.colors.primaryLight} strokeWidth={2.2} />
+                    </View>
+                    <View style={{ flexShrink: 1 }}>
+                      <Text style={styles.tokenSymbolText} numberOfLines={1}>
+                        {act.title}
+                      </Text>
+                      <Text style={styles.activityDexText}>{act.subtitle}</Text>
+                      <Text style={styles.activityTimeText}>{act.time} · {act.hash}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.tokenRight}>
+                    <View style={styles.completedBadge}>
+                      <View style={styles.greenDot} />
+                      <Text style={styles.completedText}>{act.status}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
           </View>
         )}
       </ScrollView>
@@ -507,10 +537,7 @@ export default function PortfolioScreen() {
         visible={chainModalVisible}
         target="from"
         onClose={() => setChainModalVisible(false)}
-        onSelect={(chain) => {
-          setSelectedChain(chain);
-          setChainModalVisible(false);
-        }}
+        onSelect={handleSelectChain}
       />
     </SafeAreaContainer>
   );
@@ -521,6 +548,39 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
     scrollContent: {
       padding: 16,
       gap: 14,
+    },
+    connectPromptCard: {
+      backgroundColor: theme.colors.cardBackground,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: 18,
+      gap: 10,
+    },
+    connectPromptTitle: {
+      color: theme.colors.white,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+    connectPromptSubtitle: {
+      color: theme.colors.grey,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    connectButton: {
+      marginTop: 4,
+      borderRadius: 12,
+      overflow: "hidden",
+    },
+    connectGradient: {
+      paddingVertical: 11,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    connectButtonText: {
+      color: "#FFFFFF",
+      fontSize: 14,
+      fontWeight: "700",
     },
     heroCard: {
       backgroundColor: theme.colors.cardBackground,
@@ -558,11 +618,6 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       fontSize: 12,
       fontWeight: "700",
     },
-    chartContainer: {
-      height: 80,
-      justifyContent: "center",
-      marginVertical: 4,
-    },
     timeframeRow: {
       flexDirection: "row",
       backgroundColor: theme.colors.dark,
@@ -593,9 +648,6 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       paddingVertical: 13,
       gap: 8,
     },
-    mainSwapEmoji: {
-      fontSize: 18,
-    },
     mainSwapBtnText: {
       color: "#FFFFFF",
       fontSize: 15,
@@ -614,6 +666,9 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       paddingVertical: 9,
       alignItems: "center",
       borderRadius: 10,
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 6,
     },
     tabButtonActive: {
       backgroundColor: theme.colors.primary,
@@ -633,6 +688,47 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       borderWidth: 1,
       borderColor: theme.colors.border,
       paddingHorizontal: 14,
+      minHeight: 120,
+    },
+    loadingContainer: {
+      paddingVertical: 32,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+    },
+    loadingText: {
+      color: theme.colors.grey,
+      fontSize: 13,
+    },
+    emptyContainer: {
+      paddingVertical: 32,
+      paddingHorizontal: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+    },
+    emptyTitle: {
+      color: theme.colors.white,
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    emptySubtitle: {
+      color: theme.colors.grey,
+      fontSize: 12,
+      textAlign: "center",
+      lineHeight: 18,
+    },
+    emptyActionButton: {
+      marginTop: 8,
+      backgroundColor: theme.colors.dark,
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+      borderRadius: 8,
+    },
+    emptyActionText: {
+      color: theme.colors.primaryLight,
+      fontSize: 12,
+      fontWeight: "600",
     },
     tokenRow: {
       flexDirection: "row",
@@ -739,9 +835,6 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       backgroundColor: theme.colors.dark,
       justifyContent: "center",
       alignItems: "center",
-    },
-    activityEmoji: {
-      fontSize: 16,
     },
     activityDexText: {
       color: theme.colors.primaryLight,

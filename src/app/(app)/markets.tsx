@@ -194,7 +194,7 @@ export default function MarketsScreen() {
         <View style={styles.statBox}>
           <Text style={styles.statLabel}>Market Cap</Text>
           <Text style={styles.statValue}>
-            {overview?.marketCapUsd ? formatCompactNumber(overview.marketCapUsd) : "$2.89T"}
+            {overview?.marketCapUsd ? formatCompactNumber(overview.marketCapUsd) : "--"}
           </Text>
           <Text
             style={
@@ -205,24 +205,32 @@ export default function MarketsScreen() {
           >
             {overview?.marketCapChange24hPercent !== undefined
               ? formatPercent(overview.marketCapChange24hPercent)
-              : "+0.80%"}
+              : "--"}
           </Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statBox}>
           <Text style={styles.statLabel}>24h Volume</Text>
           <Text style={styles.statValue}>
-            {overview?.volume24hUsd ? formatCompactNumber(overview.volume24hUsd) : "$98.35B"}
+            {overview?.volume24hUsd ? formatCompactNumber(overview.volume24hUsd) : "--"}
           </Text>
-          <Text style={styles.statSub}>Across DEXs</Text>
+          <Text style={[styles.statSub, overview?.volumeChange24hPercent !== undefined && overview.volumeChange24hPercent >= 0 ? styles.statChangePositive : styles.statChangeNegative]}>
+            {overview?.volumeChange24hPercent !== undefined
+              ? formatPercent(overview.volumeChange24hPercent)
+              : "--"}
+          </Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statBox}>
           <Text style={styles.statLabel}>Dominance</Text>
           <Text style={styles.statValue}>
-            BTC {overview?.btcDominancePercent ? overview.btcDominancePercent.toFixed(1) + "%" : "53.7%"}
+            BTC {overview?.btcDominancePercent ? overview.btcDominancePercent.toFixed(1) + "%" : "--"}
           </Text>
-          <Text style={styles.statSub}>ETH 14.8%</Text>
+          <Text style={[styles.statSub, overview?.btcDominanceChangePercent !== undefined && overview.btcDominanceChangePercent >= 0 ? styles.statChangePositive : styles.statChangeNegative]}>
+            {overview?.btcDominanceChangePercent !== undefined
+              ? formatPercent(overview.btcDominanceChangePercent)
+              : "--"}
+          </Text>
         </View>
       </View>
 

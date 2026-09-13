@@ -15,7 +15,7 @@ export const config = {
     url: process.env.REDIS_URL || 'redis://localhost:6379',
   },
   database: {
-    url: process.env.DATABASE_URL || 'postgresql://localhost:5432/agregator',
+    url: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/agregator',
   },
   cacheTtl: {
     overview: parseInt(process.env.CACHE_TTL_OVERVIEW || '30', 10),
@@ -23,5 +23,10 @@ export const config = {
     price: parseInt(process.env.CACHE_TTL_PRICE || '15', 10),
     chart: parseInt(process.env.CACHE_TTL_CHART || '300', 10),
     search: parseInt(process.env.CACHE_TTL_SEARCH || '60', 10),
+    portfolio: parseInt(process.env.CACHE_TTL_PORTFOLIO || '30', 10),
+    holdings: parseInt(process.env.CACHE_TTL_HOLDINGS || '30', 10),
+    portfolioChart: parseInt(process.env.CACHE_TTL_PORTFOLIO_CHART || '120', 10),
+    transactions: parseInt(process.env.CACHE_TTL_TRANSACTIONS || '60', 10),
+    defi: parseInt(process.env.CACHE_TTL_DEFI || '120', 10),
   },
 };

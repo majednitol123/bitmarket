@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   StyleSheet,
   PanResponder,
   LayoutChangeEvent,
+  Animated,
+  ActivityIndicator,
 } from "react-native";
 import Svg, {
   Path,
@@ -216,11 +218,15 @@ function buildSmoothPath(
 
 interface PortfolioChartProps {
   timeframe: Timeframe;
+  data?: TimeframeData | null;
+  isLoading?: boolean;
   onScrubChange?: (point: { time: string; value: number } | null) => void;
 }
 
 export const PortfolioChart: React.FC<PortfolioChartProps> = ({
   timeframe,
+  data,
+  isLoading,
   onScrubChange,
 }) => {
   const theme = useTheme() as ThemeType;
@@ -237,8 +243,35 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
 
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
-  const activeData = TIMEFRAME_DATA[timeframe] || TIMEFRAME_DATA["1D"];
+  // Use ONLY real data — never fall back to hardcoded mock
+  const hasRealData = !!(data && data.points && data.points.length > 0);
+  const activeData: TimeframeData = hasRealData
+    ? data!
+    : {
+        points: [],
+        pnl: "$0.00",
+        pnlPercent: "0.00%",
+        isPositive: true,
+        high: "$0.00",
+        low: "$0.00",
+        volume24h: "$0.00",
+      };
   const points = activeData.points;
+
+  // Shimmer animation for loading skeleton
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (isLoading || !hasRealData) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
+          Animated.timing(shimmerAnim, { toValue: 0, duration: 1200, useNativeDriver: true }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    }
+  }, [isLoading, hasRealData]);
 
   const { minVal, maxVal, maxVol, minPointIndex, maxPointIndex } = useMemo(() => {
     let min = Infinity;
@@ -391,6 +424,82 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
 
   const maxCoord = svgCoords[maxPointIndex];
   const minCoord = svgCoords[minPointIndex];
+
+  // ═══ Loading / Empty State ═══
+  if (isLoading || !hasRealData) {
+    const shimmerOpacity = shimmerAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.3, 0.7],
+    });
+    return (
+      <View style={styles.outerWrapper}>
+        {/* Control bar placeholder */}
+        <View style={styles.chartControlBar}>
+          <View style={styles.modeToggleGroup}>
+            <View style={[styles.modeToggleBtn, styles.modeToggleBtnActive]}>
+              <Text style={[styles.modeToggleText, styles.modeToggleTextActive]}>Line</Text>
+            </View>
+            <View style={styles.modeToggleBtn}>
+              <Text style={styles.modeToggleText}>Candles</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+          {isLoading ? (
+            <>
+              {/* Animated shimmer bars simulating chart shape */}
+              <View style={styles.skeletonChartArea}>
+                {[0.6, 0.4, 0.7, 0.5, 0.8, 0.45, 0.65, 0.55, 0.75, 0.5, 0.6, 0.7].map((h, i) => (
+                  <Animated.View
+                    key={`skel-${i}`}
+                    style={[
+                      styles.skeletonBar,
+                      {
+                        height: `${h * 100}%`,
+                        opacity: shimmerOpacity,
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
+              <ActivityIndicator
+                size="small"
+                color="#A855F7"
+                style={{ position: "absolute" }}
+              />
+            </>
+          ) : (
+            <View style={styles.emptyChartContainer}>
+              <Text style={styles.emptyChartIcon}>📊</Text>
+              <Text style={styles.emptyChartText}>No chart data available</Text>
+              <Text style={styles.emptyChartSubtext}>
+                Connect a wallet with holdings to see portfolio charts
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Stats strip placeholder */}
+        <View style={styles.statsStrip}>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>High</Text>
+            <Text style={styles.statValue}>--</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Low</Text>
+            <Text style={styles.statValue}>--</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Volume</Text>
+            <Text style={styles.statValue}>--</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.outerWrapper}>
@@ -760,6 +869,42 @@ const styles = StyleSheet.create({
   outerWrapper: {
     width: "100%",
     gap: 8,
+  },
+  skeletonChartArea: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-evenly",
+    width: "100%",
+    height: "70%",
+    paddingHorizontal: 20,
+    gap: 6,
+  },
+  skeletonBar: {
+    flex: 1,
+    backgroundColor: "rgba(168, 85, 247, 0.15)",
+    borderRadius: 3,
+    minWidth: 6,
+  },
+  emptyChartContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 20,
+  },
+  emptyChartIcon: {
+    fontSize: 28,
+    marginBottom: 4,
+  },
+  emptyChartText: {
+    color: "#94A3B8",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  emptyChartSubtext: {
+    color: "#64748B",
+    fontSize: 11,
+    textAlign: "center",
+    lineHeight: 16,
   },
   chartControlBar: {
     flexDirection: "row",
