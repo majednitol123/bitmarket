@@ -1,176 +1,56 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   ScrollView,
+  FlatList,
   RefreshControl,
   StyleSheet,
+  AppState,
+  ActivityIndicator,
 } from "react-native";
 import { useTheme } from "styled-components/native";
 import { useSafeAreaInsets, EdgeInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { useDispatch, useSelector } from "react-redux";
+
 import type { ThemeType } from "../../styles/theme";
 import { SafeAreaContainer } from "../../components/Styles/Layout.styles";
 import Header from "../../components/Header/Header";
 import { BlockchainIcon } from "../../components/BlockchainIcon/BlockchainIcon";
 import { ChainSelectorModal } from "../../components/ChainSelectorModal/ChainSelectorModal";
-import { CHAINS, DEFAULT_TOKENS, type Chain } from "../../constants/tokenRegistry";
+import { CHAINS, type Chain } from "../../constants/tokenRegistry";
 import {
   SearchIcon,
   SwapIcon,
-  MarketsIcon,
 } from "../../components/Icons/AppIcons";
-
-interface MarketItem {
-  symbol: string;
-  name: string;
-  category: "Layer 1" | "DeFi" | "Layer 2" | "Stablecoin";
-  price: string;
-  priceNum: number;
-  change24h: number;
-  volume24h: string;
-  marketCap: string;
-  icon?: string;
-  chain: string;
-}
-
-const ALL_MARKET_TOKENS: MarketItem[] = [
-  {
-    symbol: "ETH",
-    name: "Ethereum",
-    category: "Layer 1",
-    price: "$2,642.50",
-    priceNum: 2642.50,
-    change24h: 3.42,
-    volume24h: "$18.4B",
-    marketCap: "$318.2B",
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
-    chain: "Ethereum",
-  },
-  {
-    symbol: "BTC",
-    name: "Wrapped Bitcoin",
-    category: "Layer 1",
-    price: "$63,120.00",
-    priceNum: 63120.00,
-    change24h: 2.15,
-    volume24h: "$24.1B",
-    marketCap: "$1.24T",
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/bitcoin/info/logo.png",
-    chain: "Ethereum",
-  },
-  {
-    symbol: "SOL",
-    name: "Solana",
-    category: "Layer 1",
-    price: "$138.45",
-    priceNum: 138.45,
-    change24h: 6.84,
-    volume24h: "$4.8B",
-    marketCap: "$64.5B",
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png",
-    chain: "Solana",
-  },
-  {
-    symbol: "UNI",
-    name: "Uniswap",
-    category: "DeFi",
-    price: "$7.85",
-    priceNum: 7.85,
-    change24h: -1.24,
-    volume24h: "$340M",
-    marketCap: "$4.7B",
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x1f9840a85d5af5bf1d1762f925bdaddc4201f984/logo.png",
-    chain: "Ethereum",
-  },
-  {
-    symbol: "ARB",
-    name: "Arbitrum",
-    category: "Layer 2",
-    price: "$0.58",
-    priceNum: 0.58,
-    change24h: 4.12,
-    volume24h: "$290M",
-    marketCap: "$2.05B",
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png",
-    chain: "Arbitrum",
-  },
-  {
-    symbol: "OP",
-    name: "Optimism",
-    category: "Layer 2",
-    price: "$1.45",
-    priceNum: 1.45,
-    change24h: 5.62,
-    volume24h: "$180M",
-    marketCap: "$1.72B",
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png",
-    chain: "Optimism",
-  },
-  {
-    symbol: "LINK",
-    name: "Chainlink",
-    category: "DeFi",
-    price: "$11.35",
-    priceNum: 11.35,
-    change24h: 5.21,
-    volume24h: "$410M",
-    marketCap: "$6.8B",
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x514910771af9ca656af840dff83e8264ecf986ca/logo.png",
-    chain: "Ethereum",
-  },
-  {
-    symbol: "AAVE",
-    name: "Aave",
-    category: "DeFi",
-    price: "$142.20",
-    priceNum: 142.20,
-    change24h: 8.95,
-    volume24h: "$215M",
-    marketCap: "$2.12B",
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9/logo.png",
-    chain: "Ethereum",
-  },
-  {
-    symbol: "MATIC",
-    name: "Polygon (POL)",
-    category: "Layer 2",
-    price: "$0.38",
-    priceNum: 0.38,
-    change24h: -0.85,
-    volume24h: "$120M",
-    marketCap: "$2.9B",
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png",
-    chain: "Polygon",
-  },
-  {
-    symbol: "USDC",
-    name: "USD Coin",
-    category: "Stablecoin",
-    price: "$1.00",
-    priceNum: 1.00,
-    change24h: 0.01,
-    volume24h: "$5.2B",
-    marketCap: "$35.4B",
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48/logo.png",
-    chain: "Ethereum",
-  },
-  {
-    symbol: "USDT",
-    name: "Tether USD",
-    category: "Stablecoin",
-    price: "$1.00",
-    priceNum: 1.00,
-    change24h: -0.02,
-    volume24h: "$38.5B",
-    marketCap: "$118.9B",
-    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdac17f958d2ee523a2206206994597c13d831ec7/logo.png",
-    chain: "Ethereum",
-  },
-];
+import { AppDispatch } from "../../store";
+import {
+  fetchMarketOverview,
+  fetchMarketTokens,
+  searchMarketTokens,
+  refreshMarketData,
+  setSelectedCategory,
+  setSearchQuery,
+  selectMarketOverview,
+  selectMarketTokens,
+  selectMarketTokensStatus,
+  selectSelectedCategory,
+  selectSearchQuery,
+  selectSearchResults,
+  selectSearchStatus,
+  selectIsRefreshing,
+  selectHasMoreTokens,
+  selectIsLoadingMore,
+  selectCurrentPage,
+} from "../../store/marketSlice";
+import { GeneralStatus } from "../../store/types";
+import { MarketToken } from "../../api/marketApi";
+import { formatCompactNumber, formatPrice, formatPercent } from "../../utils/formatters";
+import { updateTokenPrices } from "../../utils/tokenPricing";
 
 const CATEGORIES = ["All", "Top Gainers", "Layer 1", "DeFi", "Layer 2"];
 
@@ -178,45 +58,406 @@ export default function MarketsScreen() {
   const theme = useTheme() as ThemeType;
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(theme, insets), [theme, insets]);
+  const dispatch = useDispatch<AppDispatch>();
 
   const [selectedChain, setSelectedChain] = useState<Chain>(CHAINS[0]);
   const [chainModalVisible, setChainModalVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
-  const [refreshing, setRefreshing] = useState(false);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 800);
-  }, []);
+  // Redux state selectors
+  const overview = useSelector(selectMarketOverview);
+  const tokens = useSelector(selectMarketTokens);
+  const tokensStatus = useSelector(selectMarketTokensStatus);
+  const selectedCategory = useSelector(selectSelectedCategory);
+  const reduxSearchQuery = useSelector(selectSearchQuery);
+  const searchResults = useSelector(selectSearchResults);
+  const searchStatus = useSelector(selectSearchStatus);
+  const isRefreshing = useSelector(selectIsRefreshing);
+  const hasMore = useSelector(selectHasMoreTokens);
+  const isLoadingMore = useSelector(selectIsLoadingMore);
+  const currentPage = useSelector(selectCurrentPage);
 
-  const filteredTokens = useMemo(() => {
-    return ALL_MARKET_TOKENS.filter((item) => {
-      // Search match
-      const matchSearch =
-        item.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.name.toLowerCase().includes(searchQuery.toLowerCase());
+  // Local state for immediate typing responsiveness
+  const [localSearchInput, setLocalSearchInput] = useState(reduxSearchQuery);
+  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
-      if (!matchSearch) return false;
+  // Initial fetch and app foreground refresh
+  useEffect(() => {
+    dispatch(fetchMarketOverview());
+    dispatch(fetchMarketTokens({ category: selectedCategory, page: 1, append: false }));
 
-      // Category filter
-      if (selectedCategory === "All") return true;
-      if (selectedCategory === "Top Gainers") return item.change24h > 2.0;
-      return item.category === selectedCategory;
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        dispatch(fetchMarketOverview());
+        dispatch(fetchMarketTokens({ category: selectedCategory, page: 1, append: false }));
+      }
     });
-  }, [searchQuery, selectedCategory]);
 
-  const handleTrade = (item: MarketItem) => {
+    return () => {
+      subscription.remove();
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, [dispatch, selectedCategory]);
+
+  // Sync token prices to swap bridge whenever tokens change
+  useEffect(() => {
+    if (tokens && tokens.length > 0) {
+      updateTokenPrices(tokens);
+    }
+  }, [tokens]);
+
+  // Pull to refresh
+  const onRefresh = useCallback(() => {
+    dispatch(refreshMarketData());
+  }, [dispatch]);
+
+  // Handle Category selection
+  const handleCategoryPress = (cat: string) => {
+    if (cat === selectedCategory) return;
+    dispatch(setSelectedCategory(cat));
+    dispatch(fetchMarketTokens({ category: cat, page: 1, append: false }));
+  };
+
+  // Handle Search Input with 300ms debounce
+  const handleSearchChange = (text: string) => {
+    setLocalSearchInput(text);
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+    searchDebounceRef.current = setTimeout(() => {
+      dispatch(setSearchQuery(text));
+      if (text.trim().length > 0) {
+        dispatch(searchMarketTokens(text.trim()));
+      }
+    }, 300);
+  };
+
+  const handleClearSearch = () => {
+    setLocalSearchInput("");
+    dispatch(setSearchQuery(""));
+  };
+
+  // Infinite scroll pagination handler
+  const handleEndReached = () => {
+    if (
+      hasMore &&
+      !isLoadingMore &&
+      tokensStatus !== GeneralStatus.Loading &&
+      !localSearchInput.trim()
+    ) {
+      dispatch(
+        fetchMarketTokens({
+          category: selectedCategory,
+          page: currentPage + 1,
+          append: true,
+        })
+      );
+    }
+  };
+
+  // Determine displayed tokens
+  const displayedTokens: MarketToken[] = useMemo(() => {
+    if (localSearchInput.trim().length > 0) {
+      return searchResults;
+    }
+    return tokens;
+  }, [localSearchInput, searchResults, tokens]);
+
+  // Route to Token Detail screen
+  const handleTokenPress = (token: MarketToken) => {
+    router.push({
+      pathname: "/(app)/token-detail",
+      params: {
+        coinId: token.id,
+        symbol: token.symbol,
+        name: token.name,
+        icon: token.logoUrl,
+        price: formatPrice(token.priceUsd),
+        change24h: String(token.change24hPercent),
+      },
+    });
+  };
+
+  // Swap action
+  const handleTrade = (token: MarketToken) => {
     router.replace("/(app)");
+  };
+
+  const isMarketCapPositive = (overview?.marketCapChange24hPercent ?? 0) >= 0;
+
+  // Render Header Component inside FlatList
+  const renderListHeader = () => (
+    <View style={styles.headerStack}>
+      {/* ═══ Market Overview Summary Banner ═══ */}
+      <View style={styles.statsBanner}>
+        <View style={styles.statBox}>
+          <Text style={styles.statLabel}>Market Cap</Text>
+          <Text style={styles.statValue}>
+            {overview?.marketCapUsd ? formatCompactNumber(overview.marketCapUsd) : "$2.89T"}
+          </Text>
+          <Text
+            style={
+              isMarketCapPositive
+                ? styles.statChangePositive
+                : styles.statChangeNegative
+            }
+          >
+            {overview?.marketCapChange24hPercent !== undefined
+              ? formatPercent(overview.marketCapChange24hPercent)
+              : "+0.80%"}
+          </Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statBox}>
+          <Text style={styles.statLabel}>24h Volume</Text>
+          <Text style={styles.statValue}>
+            {overview?.volume24hUsd ? formatCompactNumber(overview.volume24hUsd) : "$98.35B"}
+          </Text>
+          <Text style={styles.statSub}>Across DEXs</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statBox}>
+          <Text style={styles.statLabel}>Dominance</Text>
+          <Text style={styles.statValue}>
+            BTC {overview?.btcDominancePercent ? overview.btcDominancePercent.toFixed(1) + "%" : "53.7%"}
+          </Text>
+          <Text style={styles.statSub}>ETH 14.8%</Text>
+        </View>
+      </View>
+
+      {/* ═══ Search Bar ═══ */}
+      <LinearGradient
+        colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.searchGradientBorder}
+      >
+        <View style={styles.searchRow}>
+          <SearchIcon size={18} color={theme.colors.lightGrey} strokeWidth={2} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by token or symbol..."
+            placeholderTextColor={theme.colors.grey}
+            value={localSearchInput}
+            onChangeText={handleSearchChange}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {localSearchInput.length > 0 && (
+            <TouchableOpacity onPress={handleClearSearch}>
+              <Text style={styles.clearIcon}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </LinearGradient>
+
+      {/* Search result count feedback */}
+      {localSearchInput.trim().length > 0 && (
+        <View style={styles.searchCountRow}>
+          <Text style={styles.searchCountText}>
+            {searchStatus === GeneralStatus.Loading
+              ? "Searching assets..."
+              : `Found ${displayedTokens.length} matching token${displayedTokens.length === 1 ? "" : "s"}`}
+          </Text>
+          <TouchableOpacity onPress={handleClearSearch}>
+            <Text style={styles.searchResetText}>Reset</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ═══ Categories Scroll (Text Only) ═══ */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoryScroll}
+      >
+        {CATEGORIES.map((cat) => {
+          const isActive = selectedCategory === cat;
+          return (
+            <TouchableOpacity
+              key={cat}
+              onPress={() => handleCategoryPress(cat)}
+              style={[
+                styles.categoryPill,
+                isActive && {
+                  backgroundColor: theme.colors.primary,
+                  borderColor: theme.colors.primary,
+                },
+              ]}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[
+                  styles.categoryText,
+                  isActive && { color: "#FFFFFF", fontWeight: "700" },
+                ]}
+              >
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {/* ═══ Token List Header Row ═══ */}
+      <View style={styles.listHeaderRow}>
+        <Text style={styles.listHeaderCol1}>Asset</Text>
+        <Text style={styles.listHeaderCol2}>Price / 24h</Text>
+        <Text style={styles.listHeaderCol3}>Action</Text>
+      </View>
+    </View>
+  );
+
+  // Render individual Token Card
+  const renderTokenCard = ({ item: token }: { item: MarketToken }) => {
+    const isPositive = token.change24hPercent >= 0;
+
+    return (
+      <TouchableOpacity
+        key={token.id || token.symbol}
+        style={styles.tokenCard}
+        activeOpacity={0.7}
+        onPress={() => handleTokenPress(token)}
+      >
+        {/* Asset Column with Rank Badge */}
+        <View style={styles.assetCol}>
+          <BlockchainIcon
+            symbol={token.symbol}
+            size={34}
+            logoUrl={token.logoUrl}
+          />
+          <View style={styles.assetInfo}>
+            <View style={styles.symbolRankRow}>
+              <Text style={styles.assetSymbol}>{token.symbol}</Text>
+              {token.rank && token.rank < 1000 ? (
+                <View style={styles.rankBadge}>
+                  <Text style={styles.rankBadgeText}>#{token.rank}</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.assetName} numberOfLines={1}>
+              {token.name}
+            </Text>
+          </View>
+        </View>
+
+        {/* Price & Change Column */}
+        <View style={styles.priceCol}>
+          <Text style={styles.priceText}>{formatPrice(token.priceUsd)}</Text>
+          <View
+            style={[
+              styles.changeBadge,
+              {
+                backgroundColor: isPositive
+                  ? "rgba(16, 185, 129, 0.15)"
+                  : "rgba(239, 68, 68, 0.15)",
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.changeText,
+                { color: isPositive ? "#10B981" : "#EF4444" },
+              ]}
+            >
+              {formatPercent(token.change24hPercent)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Trade Action Column */}
+        <TouchableOpacity
+          style={styles.tradeButton}
+          activeOpacity={0.8}
+          onPress={() => handleTrade(token)}
+        >
+          <LinearGradient
+            colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.tradeGradient}
+          >
+            <SwapIcon size={12} color="#FFFFFF" strokeWidth={2.5} />
+            <Text style={styles.tradeButtonText}>Swap</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    );
+  };
+
+  // Render Footer with Load More Spinner or End of List Indicator
+  const renderListFooter = () => {
+    if (isLoadingMore) {
+      return (
+        <View style={styles.loadMoreContainer}>
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+          <Text style={styles.loadMoreText}>Loading more assets...</Text>
+        </View>
+      );
+    }
+
+    if (!hasMore && displayedTokens.length > 0 && !localSearchInput.trim()) {
+      return (
+        <View style={styles.endOfListContainer}>
+          <View style={styles.endOfListDivider} />
+          <Text style={styles.endOfListText}>
+            All {displayedTokens.length} assets loaded
+          </Text>
+          <View style={styles.endOfListDivider} />
+        </View>
+      );
+    }
+
+    return null;
+  };
+
+  // Render Empty state or initial Skeleton cards
+  const renderListEmpty = () => {
+    if (tokensStatus === GeneralStatus.Loading || searchStatus === GeneralStatus.Loading) {
+      return (
+        <View style={styles.skeletonContainer}>
+          {[1, 2, 3, 4, 5, 6].map((k) => (
+            <View key={k} style={styles.skeletonCard}>
+              <View style={styles.skeletonIcon} />
+              <View style={styles.skeletonTextGroup}>
+                <View style={styles.skeletonLineLong} />
+                <View style={styles.skeletonLineShort} />
+              </View>
+              <View style={[styles.skeletonTextGroup, { alignItems: "flex-end" }]}>
+                <View style={styles.skeletonLineLong} />
+                <View style={styles.skeletonLineShort} />
+              </View>
+            </View>
+          ))}
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.emptyContainer}>
+        <SearchIcon size={40} color={theme.colors.grey} strokeWidth={1.5} />
+        <Text style={styles.emptyTitle}>No tokens found</Text>
+        <Text style={styles.emptySub}>
+          Try searching with another symbol or category.
+        </Text>
+      </View>
+    );
   };
 
   return (
     <SafeAreaContainer edges={["bottom", "left", "right"]}>
       <Header title="Markets" rightAction="connect" />
 
-      <ScrollView
+      <FlatList
+        data={displayedTokens}
+        keyExtractor={(item) => item.id || item.symbol}
+        renderItem={renderTokenCard}
+        ListHeaderComponent={renderListHeader}
+        ListFooterComponent={renderListFooter}
+        ListEmptyComponent={renderListEmpty}
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.4}
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: insets.bottom + 120 },
@@ -225,173 +466,11 @@ export default function MarketsScreen() {
         refreshControl={
           <RefreshControl
             tintColor={theme.colors.primary}
-            refreshing={refreshing}
+            refreshing={isRefreshing}
             onRefresh={onRefresh}
           />
         }
-      >
-        {/* ═══ Market Overview Summary Banner ═══ */}
-        <View style={styles.statsBanner}>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Market Cap</Text>
-            <Text style={styles.statValue}>$2.38T</Text>
-            <Text style={styles.statChangePositive}>+2.8%</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>24h Volume</Text>
-            <Text style={styles.statValue}>$68.2B</Text>
-            <Text style={styles.statSub}>Across DEXs</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Dominance</Text>
-            <Text style={styles.statValue}>BTC 56.4%</Text>
-            <Text style={styles.statSub}>ETH 14.8%</Text>
-          </View>
-        </View>
-
-        {/* ═══ Search Bar ═══ */}
-        <LinearGradient
-          colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.searchGradientBorder}
-        >
-          <View style={styles.searchRow}>
-            <SearchIcon size={18} color={theme.colors.lightGrey} strokeWidth={2} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search by token or symbol..."
-              placeholderTextColor={theme.colors.grey}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery("")}>
-                <Text style={styles.clearIcon}>✕</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </LinearGradient>
-
-        {/* ═══ Categories Scroll ═══ */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryScroll}
-        >
-          {CATEGORIES.map((cat) => {
-            const isActive = selectedCategory === cat;
-            return (
-              <TouchableOpacity
-                key={cat}
-                onPress={() => setSelectedCategory(cat)}
-                style={[
-                  styles.categoryPill,
-                  isActive && {
-                    backgroundColor: theme.colors.primary,
-                    borderColor: theme.colors.primary,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.categoryText,
-                    isActive && { color: "#FFFFFF", fontWeight: "700" },
-                  ]}
-                >
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* ═══ Token List Header ═══ */}
-        <View style={styles.listHeaderRow}>
-          <Text style={styles.listHeaderCol1}>Asset</Text>
-          <Text style={styles.listHeaderCol2}>Price / 24h</Text>
-          <Text style={styles.listHeaderCol3}>Action</Text>
-        </View>
-
-        {/* ═══ Token Cards ═══ */}
-        {filteredTokens.map((token) => {
-          const isPositive = token.change24h >= 0;
-          return (
-            <View key={token.symbol} style={styles.tokenCard}>
-              {/* Asset Col */}
-              <View style={styles.assetCol}>
-                <BlockchainIcon
-                  symbol={token.symbol}
-                  size={32}
-                  logoUrl={token.icon}
-                />
-                <View style={styles.assetInfo}>
-                  <Text style={styles.assetSymbol}>{token.symbol}</Text>
-                  <Text style={styles.assetName} numberOfLines={1}>
-                    {token.name}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Price & Change Col */}
-              <View style={styles.priceCol}>
-                <Text style={styles.priceText}>{token.price}</Text>
-                <View
-                  style={[
-                    styles.changeBadge,
-                    {
-                      backgroundColor: isPositive
-                        ? "rgba(16, 185, 129, 0.15)"
-                        : "rgba(239, 68, 68, 0.15)",
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.changeText,
-                      { color: isPositive ? "#10B981" : "#EF4444" },
-                    ]}
-                  >
-                    {isPositive ? "+" : ""}
-                    {token.change24h}%
-                  </Text>
-                </View>
-              </View>
-
-              {/* Trade Action Col */}
-              <TouchableOpacity
-                style={styles.tradeButton}
-                activeOpacity={0.8}
-                onPress={() => handleTrade(token)}
-              >
-                <LinearGradient
-                  colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.tradeGradient}
-                >
-                  <SwapIcon size={12} color="#FFFFFF" strokeWidth={2.5} />
-                  <Text style={styles.tradeButtonText}>Swap</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          );
-        })}
-
-        {filteredTokens.length === 0 && (
-          <View style={styles.emptyContainer}>
-            <SearchIcon size={40} color={theme.colors.grey} strokeWidth={1.5} />
-            <Text style={styles.emptyTitle}>No tokens found</Text>
-            <Text style={styles.emptySub}>
-              Try searching with another symbol or category.
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+      />
 
       <ChainSelectorModal
         visible={chainModalVisible}
@@ -410,7 +489,10 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
   return StyleSheet.create({
     scrollContent: {
       padding: 16,
+    },
+    headerStack: {
       gap: 14,
+      marginBottom: 10,
     },
     statsBanner: {
       flexDirection: "row",
@@ -442,6 +524,11 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       fontSize: 11,
       fontWeight: "700",
     },
+    statChangeNegative: {
+      color: "#EF4444",
+      fontSize: 11,
+      fontWeight: "700",
+    },
     statSub: {
       color: theme.colors.lightGrey,
       fontSize: 10,
@@ -463,9 +550,6 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       paddingVertical: 10,
       gap: 8,
     },
-    searchIcon: {
-      fontSize: 15,
-    },
     searchInput: {
       flex: 1,
       color: theme.colors.white,
@@ -477,12 +561,29 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       fontSize: 14,
       paddingHorizontal: 4,
     },
+    searchCountRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 4,
+      marginTop: -4,
+    },
+    searchCountText: {
+      color: theme.colors.lightGrey,
+      fontSize: 12,
+      fontWeight: "500",
+    },
+    searchResetText: {
+      color: theme.colors.primary,
+      fontSize: 12,
+      fontWeight: "600",
+    },
     categoryScroll: {
       gap: 8,
       paddingVertical: 2,
     },
     categoryPill: {
-      paddingHorizontal: 14,
+      paddingHorizontal: 16,
       paddingVertical: 8,
       borderRadius: 12,
       backgroundColor: theme.colors.cardBackground,
@@ -533,6 +634,7 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       borderColor: theme.colors.border,
       paddingVertical: 12,
       paddingHorizontal: 14,
+      marginBottom: 10,
       gap: 8,
     },
     assetCol: {
@@ -540,6 +642,24 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       flexDirection: "row",
       alignItems: "center",
       gap: 10,
+    },
+    symbolRankRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    rankBadge: {
+      backgroundColor: "rgba(255, 255, 255, 0.06)",
+      paddingHorizontal: 5,
+      paddingVertical: 1.5,
+      borderRadius: 5,
+      borderWidth: 1,
+      borderColor: "rgba(255, 255, 255, 0.08)",
+    },
+    rankBadgeText: {
+      color: theme.colors.lightGrey,
+      fontSize: 10,
+      fontWeight: "700",
     },
     assetInfo: {
       flex: 1,
@@ -587,13 +707,79 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       fontSize: 12,
       fontWeight: "700",
     },
+    loadMoreContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 18,
+      gap: 10,
+    },
+    loadMoreText: {
+      color: theme.colors.lightGrey,
+      fontSize: 12,
+      fontWeight: "500",
+    },
+    endOfListContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 24,
+      gap: 12,
+    },
+    endOfListDivider: {
+      flex: 1,
+      height: 1,
+      backgroundColor: theme.colors.border,
+    },
+    endOfListText: {
+      color: theme.colors.grey,
+      fontSize: 11,
+      fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    skeletonContainer: {
+      gap: 10,
+      paddingVertical: 4,
+    },
+    skeletonCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: theme.colors.cardBackground,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      paddingVertical: 14,
+      paddingHorizontal: 14,
+      gap: 10,
+      opacity: 0.6,
+    },
+    skeletonIcon: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: "rgba(255, 255, 255, 0.08)",
+    },
+    skeletonTextGroup: {
+      flex: 1,
+      gap: 6,
+    },
+    skeletonLineLong: {
+      width: 70,
+      height: 12,
+      borderRadius: 6,
+      backgroundColor: "rgba(255, 255, 255, 0.08)",
+    },
+    skeletonLineShort: {
+      width: 45,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: "rgba(255, 255, 255, 0.05)",
+    },
     emptyContainer: {
       alignItems: "center",
       paddingVertical: 40,
       gap: 8,
-    },
-    emptyEmoji: {
-      fontSize: 36,
     },
     emptyTitle: {
       color: theme.colors.white,

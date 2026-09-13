@@ -21,6 +21,7 @@ import { evmServices, registerEvmService } from "../services/EthereumService";
 
 import settingsReducer from "./settingsSlice";
 import connectedUserReducer from "./connectedUserSlice";
+import marketReducer from "./marketSlice";
 
 import { GeneralStatus } from "./types";
 
@@ -55,7 +56,7 @@ const walletPersistConfig = {
 const persistConfig = {
   key: "root",
   storage: AsyncStorage,
-  whitelist: ["biometrics", "settings"],
+  whitelist: ["biometrics", "settings", "market"],
 };
 
 const rootReducer = combineReducers({
@@ -63,6 +64,7 @@ const rootReducer = combineReducers({
   biometrics: biometricsReducer,
   settings: settingsReducer,
   connectedUser: connectedUserReducer,
+  market: marketReducer,
 });
 
 const resettableRootReducer = (state: any, action: any) => {

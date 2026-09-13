@@ -93,6 +93,7 @@ export default function AppLayout() {
           <Tabs.Screen name="portfolio" options={{ title: "Portfolio" }} />
           <Tabs.Screen name="settings" options={{ title: "Settings" }} />
           <Tabs.Screen name="camera" options={{ href: null }} />
+          <Tabs.Screen name="token-detail" options={{ href: null }} />
         </Tabs>
 
         <Toast position="top" topOffset={75} config={toastConfig} />

@@ -10,6 +10,7 @@ export interface Routes {
   camera: string;
   portfolio: string;
   markets: string;
+  tokenDetail: string;
 }
 
 export const ROUTES: Routes = {
@@ -24,4 +25,5 @@ export const ROUTES: Routes = {
   camera: "/(app)/camera",
   portfolio: "/(app)/portfolio",
   markets: "/(app)/markets",
+  tokenDetail: "/(app)/token-detail",
 };

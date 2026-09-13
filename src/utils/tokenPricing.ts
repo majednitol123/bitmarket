@@ -44,6 +44,26 @@ export const TOKEN_USD_PRICES: Record<string, number> = {
 };
 
 /**
+ * Dynamically update token price from live market data
+ */
+export function updateTokenPrice(symbol: string, price: number): void {
+  if (!symbol || typeof price !== 'number' || isNaN(price) || price <= 0) return;
+  TOKEN_USD_PRICES[symbol.toUpperCase()] = price;
+}
+
+/**
+ * Bulk update token prices from live market tokens list
+ */
+export function updateTokenPrices(tokens: { symbol: string; priceUsd?: number }[]): void {
+  if (!Array.isArray(tokens)) return;
+  for (const t of tokens) {
+    if (t?.symbol && typeof t.priceUsd === 'number' && t.priceUsd > 0) {
+      TOKEN_USD_PRICES[t.symbol.toUpperCase()] = t.priceUsd;
+    }
+  }
+}
+
+/**
  * Get USD price for a given token symbol.
  */
 export function getTokenPrice(symbol?: string): number {

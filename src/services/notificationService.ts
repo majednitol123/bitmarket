@@ -28,9 +28,24 @@ export function areNotificationsEnabled(): boolean {
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
   let token: string | null = null;
 
+  // Android notification channel (must run even on simulator so local notifications work)
+  if (Platform.OS === "android") {
+    try {
+      await Notifications.setNotificationChannelAsync("wallet", {
+        name: "BitMarket Alerts",
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#8B5CF6",
+      });
+    } catch (e) {
+      if (__DEV__) console.log("[Notifications] Could not set Android notification channel:", e);
+    }
+  }
+
   // Push notifications only work on physical devices for remote push
   if (!Device.isDevice) {
-    if (__DEV__) console.log("[Notifications] Running on simulator — push token unavailable, local notifications still work.");
+    if (__DEV__) console.log("[Notifications] Running on simulator — push token unavailable, local notifications active.");
+    return null;
   }
 
   // Request permissions (iOS requires explicit alert/badge/sound options)
@@ -54,33 +69,23 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     return null;
   }
 
-  // Get push token (requires a real device + EAS project)
+  // Get push token (requires a real device + EAS project + FCM credentials on Android)
   try {
     const pushToken = await Notifications.getExpoPushTokenAsync({
       projectId: "7e6399b3-7de1-4548-bfe8-7d91129eeeeb",
     });
     token = pushToken.data;
     if (__DEV__) console.log("[Notifications] Expo Push Token:", token);
-  } catch (e) {
-    if (__DEV__) console.log("[Notifications] Could not get push token (expected on simulator):", e);
+  } catch (e: any) {
+    if (__DEV__) console.log("[Notifications] Remote push token unavailable (FCM credentials not configured):", e?.message || e);
   }
 
   // Also get the native device push token (APNs for iOS, FCM for Android)
   try {
     const deviceToken = await Notifications.getDevicePushTokenAsync();
     if (__DEV__) console.log("[Notifications] Native Device Token:", deviceToken.data);
-  } catch (e) {
-    if (__DEV__) console.log("[Notifications] Could not get device token:", e);
-  }
-
-  // Android notification channel (iOS uses categories instead, handled by the OS)
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("wallet", {
-      name: "BitMarket Alerts",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#8B5CF6",
-    });
+  } catch (e: any) {
+    if (__DEV__) console.log("[Notifications] Native device token unavailable:", e?.message || e);
   }
 
   return token;
