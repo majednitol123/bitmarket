@@ -15,6 +15,7 @@ import {
   mapCoinStatsHoldings,
   mapCoinStatsTransactions,
   buildPortfolioChartData,
+  mapCoinStatsDefi,
 } from './portfolio.mapper';
 import { portfolioCacheKeys, invalidatePortfolioCache } from './portfolio.cache';
 import { snapshotService } from './snapshot.service';
@@ -38,7 +39,21 @@ export class PortfolioService {
     const cacheKey = portfolioCacheKeys.portfolio(normChain, targetAddress);
 
     return cacheService.getOrFetch(cacheKey, config.cacheTtl.portfolio, async () => {
-      const rawBalance = await coinStatsProvider.getWalletBalance(normChain, targetAddress);
+      let rawBalance: any[] = [];
+      let providerRateLimited = false;
+      try {
+        rawBalance = await coinStatsProvider.getWalletBalance(normChain, targetAddress);
+      } catch (err: any) {
+        const status = err.response?.status;
+        // Propagate rate-limit / credits-exhausted errors so empty results don't get cached
+        if (status === 429 || status === 406) {
+          providerRateLimited = true;
+          console.warn(`[PortfolioService] Provider rate-limited (${status}) for ${normChain}:${targetAddress}`);
+          throw err;
+        }
+        console.warn(`[PortfolioService] Non-critical balance error (${normChain}:${targetAddress}):`, err.message);
+        rawBalance = [];
+      }
       const { holdings, summary } = mapCoinStatsHoldings(normChain, rawBalance);
 
       // Asynchronously record snapshot for historical tracking (fire-and-forget)
@@ -48,6 +63,16 @@ export class PortfolioService {
         });
       }
 
+      // Fetch DeFi protocol investments or extract from staking/lending holdings
+      let defi: DeFiPosition[] = [];
+      try {
+        const rawDefi = await coinStatsProvider.getWalletDefi(normChain, targetAddress);
+        defi = mapCoinStatsDefi(normChain, rawDefi, holdings);
+      } catch (err: any) {
+        console.warn('[PortfolioService] Non-critical defi error:', err.message);
+        defi = mapCoinStatsDefi(normChain, null, holdings);
+      }
+
       return {
         wallet: {
           address: targetAddress,
@@ -55,7 +80,7 @@ export class PortfolioService {
         },
         summary,
         holdings,
-        defi: [], // Honest empty state per plan2.md (CoinStats has no DeFi endpoint)
+        defi,
         updatedAt: new Date().toISOString(),
       };
     });
@@ -91,17 +116,29 @@ export class PortfolioService {
     const cacheKey = portfolioCacheKeys.transactions(normChain, targetAddress, page, limit);
 
     return cacheService.getOrFetch(cacheKey, config.cacheTtl.transactions, async () => {
-      const raw = await coinStatsProvider.getWalletTransactions(normChain, targetAddress, page, limit);
-      const transactions = mapCoinStatsTransactions(normChain, raw.result);
+      try {
+        const raw = await coinStatsProvider.getWalletTransactions(normChain, targetAddress, page, limit);
+        const transactions = mapCoinStatsTransactions(normChain, raw.result);
 
-      return {
-        transactions,
-        meta: {
-          page,
-          limit,
-          hasMore: raw.meta?.hasNextPage ?? (transactions.length >= limit),
-        },
-      };
+        return {
+          transactions,
+          meta: {
+            page,
+            limit,
+            hasMore: raw.meta?.hasNextPage ?? (transactions.length >= limit),
+          },
+        };
+      } catch (err: any) {
+        console.warn(`[PortfolioService] Non-critical transactions error (${normChain}:${targetAddress}):`, err.message);
+        return {
+          transactions: [],
+          meta: {
+            page,
+            limit,
+            hasMore: false,
+          },
+        };
+      }
     });
   }
 
@@ -213,10 +250,11 @@ export class PortfolioService {
   }
 
   /**
-   * Retrieves DeFi positions (honest empty state)
+   * Retrieves DeFi positions
    */
   async getDefi(chain: string, address: string): Promise<DeFiPosition[]> {
-    return [];
+    const portfolio = await this.getPortfolio(chain, address);
+    return portfolio.defi || [];
   }
 
   /**

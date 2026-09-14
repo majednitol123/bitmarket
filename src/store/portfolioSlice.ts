@@ -167,7 +167,11 @@ export const portfolioSlice = createSlice({
       state.transactions = { items: [], page: 1, hasMore: false };
       state.defi = [];
       state.swapHistory = { items: [], page: 1, hasMore: false };
-      state.status = 'idle';
+      state.walletAddress = null;
+      state.status = 'loading';
+      state.chartStatus = 'loading';
+      state.transactionsStatus = 'loading';
+      state.historyStatus = 'loading';
       state.error = null;
     },
   },
@@ -188,6 +192,9 @@ export const portfolioSlice = createSlice({
       .addCase(fetchPortfolio.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.payload || 'Failed to fetch portfolio';
+        state.summary = null;
+        state.holdings = [];
+        state.defi = [];
       });
 
     // fetchPortfolioChart
@@ -205,8 +212,11 @@ export const portfolioSlice = createSlice({
 
     // fetchPortfolioTransactions
     builder
-      .addCase(fetchPortfolioTransactions.pending, (state) => {
+      .addCase(fetchPortfolioTransactions.pending, (state, action) => {
         state.transactionsStatus = 'loading';
+        if (!action.meta.arg.page || action.meta.arg.page === 1) {
+          state.transactions.items = [];
+        }
       })
       .addCase(fetchPortfolioTransactions.fulfilled, (state, action) => {
         state.transactionsStatus = 'succeeded';
@@ -225,8 +235,11 @@ export const portfolioSlice = createSlice({
 
     // fetchSwapHistory
     builder
-      .addCase(fetchSwapHistory.pending, (state) => {
+      .addCase(fetchSwapHistory.pending, (state, action) => {
         state.historyStatus = 'loading';
+        if (!action.meta.arg.page || action.meta.arg.page === 1) {
+          state.swapHistory.items = [];
+        }
       })
       .addCase(fetchSwapHistory.fulfilled, (state, action) => {
         state.historyStatus = 'succeeded';
@@ -254,6 +267,9 @@ export const portfolioSlice = createSlice({
         state.holdings = action.payload.holdings;
         state.defi = action.payload.defi || [];
         state.status = 'succeeded';
+        if (action.payload.wallet?.address) {
+          state.walletAddress = action.payload.wallet.address;
+        }
       })
       .addCase(refreshPortfolio.rejected, (state) => {
         state.refreshing = false;

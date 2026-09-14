@@ -34,6 +34,7 @@ import {
   YieldIcon,
   HistoryIcon,
 } from "../../components/Icons/AppIcons";
+import { getChainExplorerTxUrl } from "../../utils/chainMapping";
 
 import {
   fetchPortfolio,
@@ -41,6 +42,7 @@ import {
   fetchPortfolioTransactions,
   fetchSwapHistory,
   refreshPortfolio,
+  clearPortfolioData,
   setSelectedTimeframe,
   setSelectedChain,
   selectPortfolioSummary,
@@ -52,6 +54,7 @@ import {
   selectPortfolioStatus,
   selectPortfolioRefreshing,
   selectPortfolioSelectedTimeframe,
+  selectPortfolioError,
 } from "../../store/portfolioSlice";
 
 type TabType = "tokens" | "defi" | "activity";
@@ -73,7 +76,12 @@ export default function PortfolioScreen() {
     return eth?.globalAddresses?.[eth?.activeIndex ?? 0]?.address;
   });
 
-  const activeAddress = appKitAddress || internalAddress || null;
+  // Debug override address from Settings → Developer Tools
+  const debugOverrideAddress = useSelector(
+    (state: RootState) => state.settings?.debugOverrideAddress ?? ""
+  );
+
+  const activeAddress = debugOverrideAddress || appKitAddress || internalAddress || null;
 
   // Redux portfolio selectors
   const summary = useSelector(selectPortfolioSummary);
@@ -85,20 +93,41 @@ export default function PortfolioScreen() {
   const defiPositions = useSelector(selectPortfolioDefi);
   const status = useSelector(selectPortfolioStatus);
   const isRefreshing = useSelector(selectPortfolioRefreshing);
+  const portfolioError = useSelector(selectPortfolioError);
 
   const [selectedChainState, setSelectedChainState] = useState<Chain>(CHAINS[0]);
   const [chainModalVisible, setChainModalVisible] = useState(false);
   const [scrubPoint, setScrubPoint] = useState<{ time: string; value: number } | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("tokens");
 
-  // Fetch portfolio data when activeAddress or selectedChain changes
+  // Fetch portfolio data and transactions when activeAddress or selectedChain changes
   useEffect(() => {
     if (activeAddress) {
       dispatch(fetchPortfolio({ chain: selectedChainState.id, address: activeAddress }));
-      dispatch(fetchPortfolioChart({ chain: selectedChainState.id, address: activeAddress, range: reduxTimeframe }));
       dispatch(fetchPortfolioTransactions({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
       dispatch(fetchSwapHistory({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
     }
+  }, [dispatch, activeAddress, selectedChainState.id]);
+
+  // Fetch portfolio chart when activeAddress, selectedChain, or timeframe changes
+  useEffect(() => {
+    if (activeAddress) {
+      dispatch(fetchPortfolioChart({ chain: selectedChainState.id, address: activeAddress, range: reduxTimeframe }));
+    }
+  }, [dispatch, activeAddress, selectedChainState.id, reduxTimeframe]);
+
+  // Real-time live background polling: updates balance & transactions silently every 30s
+  useEffect(() => {
+    if (!activeAddress) return;
+
+    const pollTimer = setInterval(() => {
+      dispatch(refreshPortfolio({ chain: selectedChainState.id, address: activeAddress }));
+      dispatch(fetchPortfolioChart({ chain: selectedChainState.id, address: activeAddress, range: reduxTimeframe }));
+      dispatch(fetchPortfolioTransactions({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
+      dispatch(fetchSwapHistory({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
+    }, 30000);
+
+    return () => clearInterval(pollTimer);
   }, [dispatch, activeAddress, selectedChainState.id, reduxTimeframe]);
 
   const onRefresh = useCallback(async () => {
@@ -115,6 +144,10 @@ export default function PortfolioScreen() {
   };
 
   const handleSelectChain = (chain: Chain) => {
+    // 1. Immediately wipe previous chain state to prevent showing stale data
+    dispatch(clearPortfolioData());
+    setScrubPoint(null);
+    setActiveTab("tokens");
     setSelectedChainState(chain);
     dispatch(setSelectedChain(chain.id));
     setChainModalVisible(false);
@@ -137,8 +170,8 @@ export default function PortfolioScreen() {
   // Balance display
   const totalVal = summary?.totalValueUsd ?? 0;
   const displayBalance = scrubPoint
-    ? `$${scrubPoint.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    : `$${totalVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    ? `$${scrubPoint.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : `$${totalVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const displayLabel = scrubPoint
     ? `Portfolio at ${scrubPoint.time}`
@@ -153,7 +186,7 @@ export default function PortfolioScreen() {
       const isPos = summary.change24hPercent >= 0;
       const usdSign = isPos ? "+$" : "-$";
       const pctSign = isPos ? "+" : "";
-      return `${usdSign}${Math.abs(summary.change24hUsd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${pctSign}${summary.change24hPercent.toFixed(2)}%)`;
+      return `${usdSign}${Math.abs(summary.change24hUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${pctSign}${summary.change24hPercent.toFixed(2)}%)`;
     }
     return "$0.00 (0.00%)";
   }, [chartData, summary]);
@@ -167,10 +200,10 @@ export default function PortfolioScreen() {
       title: `${s.fromAmount || ""} ${s.fromTokenSymbol || ""} ➔ ${s.toAmount || ""} ${s.toTokenSymbol || ""}`.trim() || "Token Swap",
       subtitle: s.router || "Aggregated Swap",
       time: s.createdAt ? new Date(s.createdAt).toLocaleDateString() : "Recent",
-      hash: s.txHash,
+      hash: s.txHash ? `${s.txHash.slice(0, 6)}...${s.txHash.slice(-4)}` : "",
       status: s.status === "completed" ? "Completed" : s.status === "failed" ? "Failed" : "Pending",
       isSwap: true,
-      explorerUrl: `https://etherscan.io/tx/${s.txHash}`,
+      explorerUrl: getChainExplorerTxUrl(s.chain || selectedChainState.id, s.txHash),
     }));
 
     const txItems = transactions.items.map((t) => ({
@@ -181,13 +214,20 @@ export default function PortfolioScreen() {
       hash: t.hash ? `${t.hash.slice(0, 6)}...${t.hash.slice(-4)}` : "",
       status: "Completed",
       isSwap: t.type === "swap",
-      explorerUrl: t.explorerUrl,
+      explorerUrl: t.explorerUrl || getChainExplorerTxUrl(selectedChainState.id, t.hash),
     }));
 
     return [...swapItems, ...txItems];
-  }, [swapHistory.items, transactions.items]);
+  }, [swapHistory.items, transactions.items, selectedChainState.id]);
 
   const isLoadingInitial = status === "loading" && !summary;
+  const isRateLimited = status === "failed" && portfolioError && (
+    portfolioError.includes('rate limit') ||
+    portfolioError.includes('Rate limit') ||
+    portfolioError.includes('429') ||
+    portfolioError.includes('406') ||
+    portfolioError.includes('Credits limit')
+  );
 
   return (
     <SafeAreaContainer edges={["bottom", "left", "right"]}>
@@ -212,6 +252,22 @@ export default function PortfolioScreen() {
           />
         }
       >
+        {/* ═══ API Rate-limit / Error Banner ═══ */}
+        {isRateLimited && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerTitle}>⏳ Data Provider Temporarily Unavailable</Text>
+            <Text style={styles.errorBannerText}>
+              API rate limit reached. Pull down to retry or wait a few minutes for data to refresh automatically.
+            </Text>
+          </View>
+        )}
+        {status === "failed" && !isRateLimited && portfolioError && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerTitle}>⚠️ Portfolio Error</Text>
+            <Text style={styles.errorBannerText}>{portfolioError}</Text>
+          </View>
+        )}
+
         {/* ═══ Wallet Connection Banner (if not connected) ═══ */}
         {!activeAddress && (
           <View style={styles.connectPromptCard}>
@@ -235,23 +291,31 @@ export default function PortfolioScreen() {
         {/* ═══ Hero Net Worth Card ═══ */}
         <View style={styles.heroCard}>
           <View style={styles.heroTopRow}>
-            <View>
+            <View style={styles.heroBalanceContainer}>
               <Text style={styles.heroLabel}>{displayLabel}</Text>
-              <Text style={styles.heroBalance}>
+              <Text
+                style={styles.heroBalance}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.65}
+              >
                 {isLoadingInitial ? "$---" : displayBalance}
               </Text>
             </View>
             <View
               style={[
                 styles.pnlBadge,
-                !isPositivePnl && { backgroundColor: "rgba(239, 68, 68, 0.15)" },
+                !isPositivePnl && { backgroundColor: `${theme.colors.error}22`, borderColor: `${theme.colors.error}35` },
               ]}
             >
               <Text
                 style={[
                   styles.pnlText,
-                  !isPositivePnl && { color: "#EF4444" },
+                  !isPositivePnl && { color: theme.colors.error },
                 ]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
               >
                 {isLoadingInitial ? "Loading..." : pnlText}
               </Text>
@@ -390,27 +454,35 @@ export default function PortfolioScreen() {
                   >
                     <View style={styles.tokenLeft}>
                       <BlockchainIcon symbol={token.symbol} size={36} logoUrl={token.logoUrl} />
-                      <View style={{ flexShrink: 1 }}>
+                      <View style={styles.tokenInfoCol}>
                         <View style={styles.symbolRow}>
-                          <Text style={styles.tokenSymbolText}>{token.symbol}</Text>
+                          <Text style={styles.tokenSymbolText} numberOfLines={1} ellipsizeMode="tail">
+                            {token.symbol}
+                          </Text>
                           <View style={styles.chainPill}>
                             <Text style={styles.chainPillText}>{token.allocationPercent}%</Text>
                           </View>
                         </View>
-                        <Text style={styles.tokenBalanceText} numberOfLines={1}>
+                        <Text style={styles.tokenBalanceText} numberOfLines={1} ellipsizeMode="tail">
                           {token.balance}
                         </Text>
                       </View>
                     </View>
 
                     <View style={styles.tokenMiddle}>
-                      <Text style={styles.tokenValueText}>
-                        ${token.valueUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <Text
+                        style={styles.tokenValueText}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.75}
+                      >
+                        ${token.valueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </Text>
                       <Text
+                        numberOfLines={1}
                         style={[
                           styles.tokenPriceText,
-                          { color: isPositive ? "#10B981" : "#EF4444" },
+                          { color: isPositive ? theme.colors.success : theme.colors.error },
                         ]}
                       >
                         ${token.priceUsd < 0.01 ? token.priceUsd.toPrecision(3) : token.priceUsd.toFixed(2)} ({isPositive ? "+" : ""}
@@ -444,15 +516,43 @@ export default function PortfolioScreen() {
           <View style={styles.listCard}>
             {defiPositions.length === 0 ? (
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyTitle}>No Active DeFi Positions</Text>
+                <Text style={styles.emptyTitle}>🚀 DeFi Tracking — Coming Soon</Text>
                 <Text style={styles.emptySubtitle}>
-                  Liquidity pools, staking positions, and lending deposits on {selectedChainState.name} will appear here.
+                  We're building real-time DeFi position tracking for lending, staking, and liquidity pools on {selectedChainState.name}. Stay tuned!
                 </Text>
+                <View style={styles.defiSuggestions}>
+                  <Text style={styles.defiSuggestionsTitle}>
+                    POPULAR PROTOCOLS ON {selectedChainState.name.toUpperCase()}
+                  </Text>
+                  <View style={styles.defiTagsRow}>
+                    {(selectedChainState.id === "56"
+                      ? ["PancakeSwap", "Venus", "Alpaca", "Biswap"]
+                      : selectedChainState.id === "137"
+                      ? ["QuickSwap", "Aave V3", "Uniswap V3", "Balancer"]
+                      : selectedChainState.id === "42161"
+                      ? ["GMX", "Camelot", "Aave V3", "Radiant"]
+                      : selectedChainState.id === "8453"
+                      ? ["Aerodrome", "Moonwell", "Uniswap V3"]
+                      : ["Lido", "Aave V3", "Uniswap V3", "Curve", "Maker / Sky"]
+                    ).map((proto) => (
+                      <View key={proto} style={styles.defiTag}>
+                        <Text style={styles.defiTagText}>{proto}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.emptyActionButton}
+                  onPress={handleNavigateSwap}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.emptyActionText}>Get Yield Tokens via Swap</Text>
+                </TouchableOpacity>
               </View>
             ) : (
               defiPositions.map((pos, idx) => (
                 <View
-                  key={pos.pool}
+                  key={`${pos.protocol}-${pos.pool}-${idx}`}
                   style={[
                     styles.tokenRow,
                     idx < defiPositions.length - 1 && styles.rowDivider,
@@ -460,17 +560,29 @@ export default function PortfolioScreen() {
                 >
                   <View style={styles.tokenLeft}>
                     <BlockchainIcon symbol={pos.protocol} size={36} logoUrl={pos.icon} />
-                    <View>
-                      <Text style={styles.tokenSymbolText}>{pos.protocol}</Text>
-                      <Text style={styles.defiPoolText}>{pos.pool}</Text>
-                      <Text style={styles.defiEarningsText}>{pos.earnings}</Text>
+                    <View style={styles.tokenInfoCol}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Text style={styles.tokenSymbolText} numberOfLines={1}>{pos.protocol}</Text>
+                        <View style={styles.chainPill}>
+                          <Text style={styles.chainPillText}>{pos.type}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.defiPoolText} numberOfLines={1}>{pos.pool}</Text>
+                      <Text style={styles.defiEarningsText} numberOfLines={1}>{pos.earnings}</Text>
                     </View>
                   </View>
 
                   <View style={styles.tokenRight}>
-                    <Text style={styles.tokenValueText}>{pos.deposited}</Text>
+                    <Text
+                      style={styles.tokenValueText}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                    >
+                      {pos.deposited}
+                    </Text>
                     <View style={styles.apyBadge}>
-                      <Text style={styles.apyText}>{pos.apy}</Text>
+                      <Text style={styles.apyText} numberOfLines={1}>APY {pos.apy}</Text>
                     </View>
                   </View>
                 </View>
@@ -511,12 +623,12 @@ export default function PortfolioScreen() {
                     <View style={styles.activityIconBox}>
                       <SwapIcon size={16} color={theme.colors.primaryLight} strokeWidth={2.2} />
                     </View>
-                    <View style={{ flexShrink: 1 }}>
+                    <View style={styles.tokenInfoCol}>
                       <Text style={styles.tokenSymbolText} numberOfLines={1}>
                         {act.title}
                       </Text>
-                      <Text style={styles.activityDexText}>{act.subtitle}</Text>
-                      <Text style={styles.activityTimeText}>{act.time} · {act.hash}</Text>
+                      <Text style={styles.activityDexText} numberOfLines={1}>{act.subtitle}</Text>
+                      <Text style={styles.activityTimeText} numberOfLines={1}>{act.time} · {act.hash}</Text>
                     </View>
                   </View>
 
@@ -548,6 +660,24 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
     scrollContent: {
       padding: 16,
       gap: 14,
+    },
+    errorBanner: {
+      backgroundColor: `${theme.colors.error}15`,
+      borderWidth: 1,
+      borderColor: `${theme.colors.error}40`,
+      borderRadius: 14,
+      padding: 14,
+      gap: 4,
+    },
+    errorBannerTitle: {
+      color: theme.colors.error,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    errorBannerText: {
+      color: theme.colors.lightGrey,
+      fontSize: 12,
+      lineHeight: 17,
     },
     connectPromptCard: {
       backgroundColor: theme.colors.cardBackground,
@@ -593,7 +723,12 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
     heroTopRow: {
       flexDirection: "row",
       justifyContent: "space-between",
-      alignItems: "flex-start",
+      alignItems: "center",
+    },
+    heroBalanceContainer: {
+      flex: 1,
+      marginRight: 10,
+      minWidth: 0,
     },
     heroLabel: {
       color: theme.colors.grey,
@@ -608,19 +743,25 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       marginTop: 2,
     },
     pnlBadge: {
-      backgroundColor: "rgba(16, 185, 129, 0.15)",
+      backgroundColor: `${theme.colors.success}22`,
+      borderWidth: 1,
+      borderColor: `${theme.colors.success}35`,
       paddingHorizontal: 10,
       paddingVertical: 5,
       borderRadius: 10,
+      flexShrink: 0,
+      maxWidth: "46%",
     },
     pnlText: {
-      color: "#10B981",
+      color: theme.colors.success,
       fontSize: 12,
       fontWeight: "700",
     },
     timeframeRow: {
       flexDirection: "row",
       backgroundColor: theme.colors.dark,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
       borderRadius: 12,
       padding: 3,
       justifyContent: "space-between",
@@ -632,7 +773,7 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       borderRadius: 9,
     },
     tfText: {
-      color: theme.colors.grey,
+      color: theme.colors.lightGrey,
       fontSize: 11,
       fontWeight: "600",
     },
@@ -674,7 +815,7 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       backgroundColor: theme.colors.primary,
     },
     tabText: {
-      color: theme.colors.grey,
+      color: theme.colors.lightGrey,
       fontSize: 12,
       fontWeight: "600",
     },
@@ -713,29 +854,68 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       fontWeight: "700",
     },
     emptySubtitle: {
-      color: theme.colors.grey,
-      fontSize: 12,
+      color: theme.colors.lightGrey,
+      fontSize: 13,
       textAlign: "center",
-      lineHeight: 18,
+      lineHeight: 19,
     },
     emptyActionButton: {
       marginTop: 8,
       backgroundColor: theme.colors.dark,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
       paddingHorizontal: 14,
-      paddingVertical: 7,
+      paddingVertical: 8,
       borderRadius: 8,
     },
     emptyActionText: {
       color: theme.colors.primaryLight,
       fontSize: 12,
-      fontWeight: "600",
+      fontWeight: "700",
+    },
+    defiSuggestions: {
+      marginTop: 10,
+      backgroundColor: theme.colors.dark,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: 12,
+      borderRadius: 10,
+      width: "100%",
+      alignItems: "center",
+      gap: 6,
+    },
+    defiSuggestionsTitle: {
+      color: theme.colors.lightGrey,
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 0.5,
+    },
+    defiTagsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "center",
+      gap: 6,
+      marginTop: 4,
+    },
+    defiTag: {
+      backgroundColor: "rgba(124, 58, 237, 0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(124, 58, 237, 0.25)",
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+    },
+    defiTagText: {
+      color: theme.colors.primaryLight,
+      fontSize: 11,
+      fontWeight: "700",
     },
     tokenRow: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
       paddingVertical: 12,
-      gap: 8,
+      gap: 6,
     },
     rowDivider: {
       borderBottomWidth: 1,
@@ -744,8 +924,13 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
     tokenLeft: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 10,
-      flex: 1.4,
+      gap: 8,
+      flex: 1.3,
+      minWidth: 0,
+    },
+    tokenInfoCol: {
+      flex: 1,
+      minWidth: 0,
     },
     symbolRow: {
       flexDirection: "row",
@@ -756,32 +941,40 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       color: theme.colors.white,
       fontSize: 14,
       fontWeight: "700",
+      flexShrink: 1,
     },
     chainPill: {
       backgroundColor: theme.colors.dark,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
       paddingHorizontal: 5,
       paddingVertical: 1,
       borderRadius: 4,
+      flexShrink: 0,
     },
     chainPillText: {
-      color: theme.colors.grey,
+      color: theme.colors.lightGrey,
       fontSize: 9,
       fontWeight: "600",
     },
     tokenBalanceText: {
       color: theme.colors.lightGrey,
-      fontSize: 11,
+      fontSize: 12,
+      fontWeight: "500",
       marginTop: 2,
     },
     tokenMiddle: {
       alignItems: "flex-end",
       gap: 2,
-      flex: 1.1,
+      flex: 1.2,
+      minWidth: 0,
+      paddingHorizontal: 2,
     },
     tokenSwapBtn: {
-      width: 58,
+      width: 54,
       borderRadius: 9,
       overflow: "hidden",
+      flexShrink: 0,
     },
     tokenSwapGradient: {
       paddingVertical: 6,
@@ -794,13 +987,14 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       fontWeight: "700",
     },
     defiPoolText: {
-      color: theme.colors.grey,
-      fontSize: 11,
-      marginTop: 1,
+      color: theme.colors.lightGrey,
+      fontSize: 12,
+      fontWeight: "500",
+      marginTop: 2,
     },
     defiEarningsText: {
-      color: "#10B981",
-      fontSize: 10,
+      color: theme.colors.success,
+      fontSize: 11,
       fontWeight: "600",
       marginTop: 2,
     },
@@ -818,9 +1012,11 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       fontWeight: "600",
     },
     apyBadge: {
-      backgroundColor: "rgba(124, 58, 237, 0.15)",
-      paddingHorizontal: 6,
-      paddingVertical: 2,
+      backgroundColor: "rgba(124, 58, 237, 0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(124, 58, 237, 0.25)",
+      paddingHorizontal: 7,
+      paddingVertical: 3,
       borderRadius: 6,
     },
     apyText: {
@@ -833,24 +1029,29 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       height: 36,
       borderRadius: 18,
       backgroundColor: theme.colors.dark,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
       justifyContent: "center",
       alignItems: "center",
     },
     activityDexText: {
-      color: theme.colors.primaryLight,
-      fontSize: 10,
+      color: theme.colors.white,
+      fontSize: 12,
       fontWeight: "600",
-      marginTop: 1,
+      marginTop: 2,
     },
     activityTimeText: {
-      color: theme.colors.grey,
+      color: theme.colors.lightGrey,
       fontSize: 10,
+      fontWeight: "500",
       marginTop: 2,
     },
     completedBadge: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: "rgba(16, 185, 129, 0.12)",
+      backgroundColor: `${theme.colors.success}18`,
+      borderWidth: 1,
+      borderColor: `${theme.colors.success}30`,
       paddingHorizontal: 7,
       paddingVertical: 3,
       borderRadius: 6,
@@ -860,10 +1061,10 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       width: 5,
       height: 5,
       borderRadius: 2.5,
-      backgroundColor: "#10B981",
+      backgroundColor: theme.colors.success,
     },
     completedText: {
-      color: "#10B981",
+      color: theme.colors.success,
       fontSize: 10,
       fontWeight: "700",
     },

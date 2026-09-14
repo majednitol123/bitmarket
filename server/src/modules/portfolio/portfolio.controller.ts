@@ -25,7 +25,18 @@ export class PortfolioController {
         success: true,
         data,
       });
-    } catch (err) {
+    } catch (err: any) {
+      const status = err.response?.status || err.statusCode;
+      if (status === 429 || status === 406) {
+        res.status(429).json({
+          success: false,
+          error: {
+            code: 'PROVIDER_RATE_LIMITED',
+            message: 'Data provider rate limit reached. Portfolio data will be available shortly — please try again in a few minutes.',
+          },
+        });
+        return;
+      }
       next(err);
     }
   }

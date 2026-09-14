@@ -7,7 +7,11 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 export const config = {
   port: parseInt(process.env.PORT || '4000', 10),
   coinstats: {
-    apiKey: process.env.COINSTATS_API_KEY || '9e04cc50d68c0cb7602cd663432857ea339f5b737e62',
+    apiKey: process.env.COINSTATS_API_KEY || '',
+    apiKeys: (process.env.COINSTATS_API_KEYS || process.env.COINSTATS_API_KEY || '')
+      .split(',')
+      .map((k) => k.trim())
+      .filter(Boolean),
     baseUrl: process.env.COINSTATS_BASE_URL || 'https://openapiv1.coinstats.app',
     timeoutMs: 10000,
   },

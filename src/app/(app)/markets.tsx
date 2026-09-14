@@ -192,11 +192,12 @@ export default function MarketsScreen() {
       {/* ═══ Market Overview Summary Banner ═══ */}
       <View style={styles.statsBanner}>
         <View style={styles.statBox}>
-          <Text style={styles.statLabel}>Market Cap</Text>
-          <Text style={styles.statValue}>
+          <Text style={styles.statLabel} numberOfLines={1}>Market Cap</Text>
+          <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
             {overview?.marketCapUsd ? formatCompactNumber(overview.marketCapUsd) : "--"}
           </Text>
           <Text
+            numberOfLines={1}
             style={
               isMarketCapPositive
                 ? styles.statChangePositive
@@ -210,11 +211,14 @@ export default function MarketsScreen() {
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statBox}>
-          <Text style={styles.statLabel}>24h Volume</Text>
-          <Text style={styles.statValue}>
+          <Text style={styles.statLabel} numberOfLines={1}>24h Volume</Text>
+          <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
             {overview?.volume24hUsd ? formatCompactNumber(overview.volume24hUsd) : "--"}
           </Text>
-          <Text style={[styles.statSub, overview?.volumeChange24hPercent !== undefined && overview.volumeChange24hPercent >= 0 ? styles.statChangePositive : styles.statChangeNegative]}>
+          <Text
+            numberOfLines={1}
+            style={[styles.statSub, overview?.volumeChange24hPercent !== undefined && overview.volumeChange24hPercent >= 0 ? styles.statChangePositive : styles.statChangeNegative]}
+          >
             {overview?.volumeChange24hPercent !== undefined
               ? formatPercent(overview.volumeChange24hPercent)
               : "--"}
@@ -222,11 +226,14 @@ export default function MarketsScreen() {
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statBox}>
-          <Text style={styles.statLabel}>Dominance</Text>
-          <Text style={styles.statValue}>
+          <Text style={styles.statLabel} numberOfLines={1}>Dominance</Text>
+          <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
             BTC {overview?.btcDominancePercent ? overview.btcDominancePercent.toFixed(1) + "%" : "--"}
           </Text>
-          <Text style={[styles.statSub, overview?.btcDominanceChangePercent !== undefined && overview.btcDominanceChangePercent >= 0 ? styles.statChangePositive : styles.statChangeNegative]}>
+          <Text
+            numberOfLines={1}
+            style={[styles.statSub, overview?.btcDominanceChangePercent !== undefined && overview.btcDominanceChangePercent >= 0 ? styles.statChangePositive : styles.statChangeNegative]}
+          >
             {overview?.btcDominanceChangePercent !== undefined
               ? formatPercent(overview.btcDominanceChangePercent)
               : "--"}

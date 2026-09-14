@@ -60,10 +60,8 @@ async function startServer() {
   await runMigrations();
 
   const server = app.listen(config.port, () => {
-    console.log(`🚀 Crypto Aggregator API Server running on http://localhost:${config.port}`);
-    console.log(`Health check: http://localhost:${config.port}/health`);
-    console.log(`Market overview: http://localhost:${config.port}/api/market/overview`);
-    console.log(`Portfolio: http://localhost:${config.port}/api/portfolio/:chain/:address`);
+    console.log(` Crypto Aggregator API Server running on http://localhost:${config.port}`);
+    
   });
 
   // Graceful shutdown

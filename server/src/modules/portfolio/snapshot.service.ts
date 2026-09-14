@@ -1,9 +1,7 @@
 import { getDbPool, isDatabaseConnected } from '../../config/database';
 
 export class SnapshotService {
-  /**
-   * Helper to ensure wallet exists and get its ID
-   */
+
   private async getOrCreateWalletId(chain: string, address: string): Promise<number | null> {
     const pool = getDbPool();
     if (!pool || !isDatabaseConnected()) return null;
@@ -54,7 +52,7 @@ export class SnapshotService {
         const lastTime = new Date(lastSnapshot.rows[0].timestamp).getTime();
         const fifteenMinutes = 15 * 60 * 1000;
         if (Date.now() - lastTime < fifteenMinutes) {
-          // Too soon for another snapshot
+         
           return;
         }
       }
@@ -68,9 +66,7 @@ export class SnapshotService {
     }
   }
 
-  /**
-   * Gets historical snapshots for a wallet
-   */
+ 
   async getSnapshots(
     chain: string,
     address: string,

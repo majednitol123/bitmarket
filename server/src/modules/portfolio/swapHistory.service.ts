@@ -3,9 +3,7 @@ import { SwapTransactionRecord } from './portfolio.types';
 import { invalidatePortfolioCache } from './portfolio.cache';
 
 export class SwapHistoryService {
-  /**
-   * Helper to ensure a wallet row exists and get its ID
-   */
+
   private async getOrCreateWalletId(chain: string, address: string): Promise<number | null> {
     const pool = getDbPool();
     if (!pool || !isDatabaseConnected()) return null;
@@ -33,9 +31,7 @@ export class SwapHistoryService {
     }
   }
 
-  /**
-   * Records a swap transaction submitted by the user
-   */
+
   async recordSwap(
     chain: string,
     address: string,
@@ -122,17 +118,25 @@ export class SwapHistoryService {
 
     try {
       const offset = (page - 1) * limit;
+      const normChain = chain.toLowerCase();
       const query = `
         SELECT s.*
         FROM swap_transactions s
         JOIN wallets w ON s.wallet_id = w.id
-        WHERE LOWER(w.chain) = $1 AND LOWER(w.address) = $2
+        WHERE (
+          LOWER(w.chain) = $1 OR LOWER(s.chain) = $1
+          OR ($1 = 'binance_smart' AND (LOWER(s.chain) IN ('56', 'binance-smart-chain', 'bsc') OR LOWER(w.chain) IN ('56', 'binance-smart-chain', 'bsc')))
+          OR ($1 = 'polygon-pos' AND (LOWER(s.chain) IN ('137', 'polygon', 'matic') OR LOWER(w.chain) IN ('137', 'polygon', 'matic')))
+          OR ($1 = 'arbitrum-one' AND (LOWER(s.chain) IN ('42161', 'arbitrum') OR LOWER(w.chain) IN ('42161', 'arbitrum')))
+          OR ($1 = 'optimistic-ethereum' AND (LOWER(s.chain) IN ('10', 'optimism') OR LOWER(w.chain) IN ('10', 'optimism')))
+          OR ($1 = 'ethereum' AND (LOWER(s.chain) = '1' OR LOWER(w.chain) = '1'))
+        ) AND LOWER(w.address) = $2
         ORDER BY s.created_at DESC
         LIMIT $3 OFFSET $4
       `;
 
       const res = await pool.query(query, [
-        chain.toLowerCase(),
+        normChain,
         address.toLowerCase(),
         limit + 1,
         offset,

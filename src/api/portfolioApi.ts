@@ -103,21 +103,10 @@ export interface NormalizedPortfolioResponse {
   updatedAt: string;
 }
 
-const getBaseUrl = () => {
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    if (Platform.OS === 'android' && process.env.EXPO_PUBLIC_API_URL.includes('localhost')) {
-      return process.env.EXPO_PUBLIC_API_URL.replace('localhost', '10.0.2.2');
-    }
-    return process.env.EXPO_PUBLIC_API_URL;
-  }
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:4000';
-  }
-  return 'http://localhost:4000';
-};
+import { getApiBaseUrl } from './apiConfig';
 
 const portfolioApiClient = axios.create({
-  baseURL: getBaseUrl(),
+  baseURL: getApiBaseUrl(),
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

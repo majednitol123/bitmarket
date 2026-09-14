@@ -598,8 +598,13 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
               },
             ]}
           >
-            <Text style={styles.tooltipPrice}>
-              ${activeCoord.data.close.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+            <Text
+              style={styles.tooltipPrice}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
+            >
+              ${activeCoord.data.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Text>
             <Text style={styles.tooltipTime}>
               {chartMode === "candles"
@@ -843,22 +848,43 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
       {/* ═══ Real-time Market Stats Strip (24h High, Low, Vol) ═══ */}
       <View style={styles.statsStrip}>
         <View style={styles.statItem}>
-          <Text style={styles.statLabel}>24h High</Text>
-          <Text style={styles.statValueGreen}>{activeData.high}</Text>
+          <Text style={styles.statLabel} numberOfLines={1}>24h High</Text>
+          <Text
+            style={styles.statValueGreen}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            {activeData.high}
+          </Text>
         </View>
 
         <View style={styles.statDivider} />
 
         <View style={styles.statItem}>
-          <Text style={styles.statLabel}>24h Low</Text>
-          <Text style={styles.statValueRed}>{activeData.low}</Text>
+          <Text style={styles.statLabel} numberOfLines={1}>24h Low</Text>
+          <Text
+            style={styles.statValueRed}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            {activeData.low}
+          </Text>
         </View>
 
         <View style={styles.statDivider} />
 
         <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Volume</Text>
-          <Text style={styles.statValue}>{activeData.volume24h}</Text>
+          <Text style={styles.statLabel} numberOfLines={1}>Volume</Text>
+          <Text
+            style={styles.statValue}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            {activeData.volume24h}
+          </Text>
         </View>
       </View>
     </View>
@@ -1037,7 +1063,10 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255, 255, 255, 0.05)",
   },
   statItem: {
+    flex: 1,
     alignItems: "center",
+    paddingHorizontal: 2,
+    minWidth: 0,
   },
   statLabel: {
     color: "#64748B",

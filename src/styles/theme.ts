@@ -162,21 +162,21 @@ export const LightTheme: ThemeType = {
   colors: {
     // Premium light crypto palette (Royal Purple & Violet)
     primary: "#7C3AED",          // Rich royal purple
-    primaryLight: "#8B5CF6",
+    primaryLight: "#6D28D9",     // Deep purple for readable text & icons on light background
     gold: "#7C3AED",
     blue: "#7C3AED",
     dark: "#F4F6FA",             // Light cool-grey app background
     darker: "#E8ECF4",           // Subtle background overlay
     lightDark: "#FFFFFF",        // Opaque white container background
     cardBackground: "#FFFFFF",   // Solid opaque white card bg
-    accent: "#8B5CF6",
+    accent: "#7C3AED",
     background: "#F4F6FA",
-    highlight: "#8B5CF6",
+    highlight: "#7C3AED",
     white: "#0B0E1A",            // Map white to dark slate for automatic typography inversion
     offWhite: "#1E293B",         // Slate-800
-    lightGrey: "#64748B",        // Slate-500 (high contrast secondary text)
-    grey: "#94A3B8",             // Slate-400 (muted details)
-    muted: "#CBD5E1",            // Slate-300 (borders and dividers)
+    lightGrey: "#475569",        // Slate-600 (crystal clear secondary text)
+    grey: "#64748B",             // Slate-500 (crisp secondary details)
+    muted: "#94A3B8",            // Slate-400 (muted dividers)
     error: "#FF4D4F",
     success: "#00B074",          // Darker green for accessibility on light background
     ethereum: "#627EEA",         // Darker violet for readability

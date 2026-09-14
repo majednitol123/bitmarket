@@ -18,22 +18,100 @@ import { config } from '../config/env';
 import { AppError } from '../middleware/errorHandler';
 
 export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvider {
-  private client: AxiosInstance;
+  private clients: AxiosInstance[];
+  private activeKeyIndex: number = 0;
 
   constructor() {
-    this.client = axios.create({
-      baseURL: config.coinstats.baseUrl,
-      timeout: config.coinstats.timeoutMs,
-      headers: {
-        'Accept': 'application/json',
-        'X-API-KEY': config.coinstats.apiKey,
-      },
+    const keys = config.coinstats.apiKeys.length > 0
+      ? config.coinstats.apiKeys
+      : config.coinstats.apiKey
+        ? [config.coinstats.apiKey]
+        : [];
+
+    if (keys.length === 0) {
+      console.warn('[CoinStatsProvider] No API keys configured!');
+    }
+
+    console.log(`[CoinStatsProvider] Initialized with ${keys.length} API key(s)`);
+
+    // Create one axios client per API key
+    this.clients = keys.map((key, idx) => {
+      const client = axios.create({
+        baseURL: config.coinstats.baseUrl,
+        timeout: config.coinstats.timeoutMs,
+        headers: {
+          'Accept': 'application/json',
+          'X-API-KEY': key,
+        },
+      });
+
+      // Auto-retry once on 429 with 1500ms delay for transient rate limits (same key)
+      client.interceptors.response.use(
+        (response) => response,
+        async (error) => {
+          const reqConfig = error.config;
+          if (error.response?.status === 429 && reqConfig && !reqConfig._retry) {
+            reqConfig._retry = true;
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+            return client(reqConfig);
+          }
+          return Promise.reject(error);
+        }
+      );
+
+      return client;
     });
+  }
+
+  /** Get the currently active client */
+  private get client(): AxiosInstance {
+    if (this.clients.length === 0) {
+      throw new AppError('No CoinStats API keys configured', 500, 'NO_API_KEYS');
+    }
+    return this.clients[this.activeKeyIndex % this.clients.length];
+  }
+
+  /**
+   * Execute a request with automatic key rotation on rate-limit (429/406).
+   * Tries each key once before giving up.
+   */
+  private async requestWithRotation<T>(fn: (client: AxiosInstance) => Promise<T>): Promise<T> {
+    const totalKeys = this.clients.length;
+    if (totalKeys === 0) {
+      throw new AppError('No CoinStats API keys configured', 500, 'NO_API_KEYS');
+    }
+
+    let lastError: any = null;
+    for (let attempt = 0; attempt < totalKeys; attempt++) {
+      const keyIdx = (this.activeKeyIndex + attempt) % totalKeys;
+      try {
+        const result = await fn(this.clients[keyIdx]);
+        // If a different key worked, make it the new default
+        if (keyIdx !== this.activeKeyIndex) {
+          console.log(`[CoinStatsProvider] Rotated to API key #${keyIdx + 1}`);
+          this.activeKeyIndex = keyIdx;
+        }
+        return result;
+      } catch (err: any) {
+        const status = err.response?.status;
+        if (status === 429 || status === 406) {
+          console.warn(`[CoinStatsProvider] Key #${keyIdx + 1} rate-limited (${status}), trying next...`);
+          lastError = err;
+          continue;
+        }
+        // Non-rate-limit error — don't rotate, just throw
+        throw err;
+      }
+    }
+
+    // All keys exhausted
+    console.error(`[CoinStatsProvider] All ${totalKeys} API keys exhausted (rate-limited)`);
+    throw lastError;
   }
 
   async getMarketOverview(): Promise<MarketOverview> {
     try {
-      const response = await this.client.get('/markets');
+      const response = await this.requestWithRotation(c => c.get('/markets'));
       return mapCoinStatsOverview(response.data);
     } catch (err: any) {
       console.error('[CoinStatsProvider] Error fetching market overview:', err.message);
@@ -59,7 +137,7 @@ export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvi
     }
 
     try {
-      const response = await this.client.get('/coins', { params });
+      const response = await this.requestWithRotation(c => c.get('/coins', { params }));
       const rawResult = response.data?.result || response.data?.coins || response.data || [];
       const tokens = mapCoinStatsCoinList(Array.isArray(rawResult) ? rawResult : []);
 
@@ -87,7 +165,7 @@ export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvi
     if (!coinId) return null;
 
     try {
-      const response = await this.client.get(`/coins/${encodeURIComponent(coinId)}`);
+      const response = await this.requestWithRotation(c => c.get(`/coins/${encodeURIComponent(coinId)}`));
       const raw = response.data?.coin || response.data?.result || response.data;
       return mapCoinStatsCoin(raw);
     } catch (err: any) {
@@ -121,9 +199,9 @@ export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvi
     if (mappedPeriod === 'all') mappedPeriod = 'all';
 
     try {
-      const response = await this.client.get(`/coins/${encodeURIComponent(coinId)}/charts`, {
+      const response = await this.requestWithRotation(c => c.get(`/coins/${encodeURIComponent(coinId)}/charts`, {
         params: { period: mappedPeriod },
-      });
+      }));
 
       return mapCoinStatsChart(coinId, period, response.data);
     } catch (err: any) {
@@ -143,12 +221,12 @@ export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvi
 
     try {
       // CoinStats supports search via ?name= or coin filtering
-      const response = await this.client.get('/coins', {
+      const response = await this.requestWithRotation(c => c.get('/coins', {
         params: {
           name: query.trim(),
           limit: 20,
         },
-      });
+      }));
 
       const rawResult = response.data?.result || response.data?.coins || response.data || [];
       return mapCoinStatsCoinList(Array.isArray(rawResult) ? rawResult : []);
@@ -168,12 +246,12 @@ export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvi
     }
 
     try {
-      const response = await this.client.get('/wallet/balance', {
+      const response = await this.requestWithRotation(c => c.get('/wallet/balance', {
         params: {
           blockchain,
           address,
         },
-      });
+      }));
 
       const raw = response.data;
       if (Array.isArray(raw)) {
@@ -210,14 +288,14 @@ export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvi
     }
 
     try {
-      const response = await this.client.get('/wallet/transactions', {
+      const response = await this.requestWithRotation(c => c.get('/wallet/transactions', {
         params: {
           blockchain,
           address,
           page,
           limit,
         },
-      });
+      }));
 
       const raw = response.data;
       const result = Array.isArray(raw?.result)
@@ -245,6 +323,33 @@ export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvi
       );
     }
   }
+
+  async getWalletDefi(
+    blockchain: string,
+    address: string
+  ): Promise<any> {
+    if (!blockchain || !address) {
+      return null;
+    }
+
+    try {
+      const response = await this.requestWithRotation(c => c.get('/wallet/defi', {
+        params: {
+          blockchain,
+          address,
+        },
+      }));
+
+      return response.data;
+    } catch (err: any) {
+      console.warn(
+        `[CoinStatsProvider] Non-critical error fetching wallet defi (${blockchain}:${address}):`,
+        err.message
+      );
+      return null;
+    }
+  }
 }
 
 export const coinStatsProvider = new CoinStatsProvider();
+

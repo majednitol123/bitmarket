@@ -10,6 +10,7 @@ export interface SettingsState {
   deadline: string;
   expertMode: boolean;
   notificationsEnabled: boolean;
+  debugOverrideAddress: string;
 }
 
 const initialState: SettingsState = {
@@ -20,6 +21,7 @@ const initialState: SettingsState = {
   deadline: "20",
   expertMode: false,
   notificationsEnabled: true,
+  debugOverrideAddress: "",
 };
 
 const settingsSlice = createSlice({
@@ -47,6 +49,9 @@ const settingsSlice = createSlice({
     setNotificationsEnabled(state, action: PayloadAction<boolean>) {
       state.notificationsEnabled = action.payload;
     },
+    setDebugOverrideAddress(state, action: PayloadAction<string>) {
+      state.debugOverrideAddress = action.payload.trim();
+    },
   },
 });
 
@@ -58,6 +63,7 @@ export const {
   setDeadline,
   setExpertMode,
   setNotificationsEnabled,
+  setDebugOverrideAddress,
 } = settingsSlice.actions;
 
 export default settingsSlice.reducer;

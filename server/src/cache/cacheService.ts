@@ -21,7 +21,7 @@ export class CacheService {
 
   private setToMemory<T>(key: string, data: T, ttlSeconds: number): void {
     if (this.memoryCache.size >= this.maxMemoryEntries) {
-      // Remove oldest entry
+     
       const firstKey = this.memoryCache.keys().next().value;
       if (firstKey) this.memoryCache.delete(firstKey);
     }
@@ -75,9 +75,7 @@ export class CacheService {
     }
   }
 
-  /**
-   * High-performance getOrFetch with Stampede Protection and graceful fallbacks.
-   */
+
   async getOrFetch<T>(key: string, ttlSeconds: number, fetcher: () => Promise<T>): Promise<T> {
     // 1. Check cache first
     const cached = await this.get<T>(key);
@@ -88,13 +86,13 @@ export class CacheService {
     const client = getRedisClient();
     const lockKey = `${key}:lock`;
 
-    // If Redis is connected, try to acquire distributed lock for stampede protection
+   
     if (client && isRedisConnected()) {
       let acquiredLock = false;
       try {
         const lockRes = await client.set(lockKey, '1', {
           NX: true,
-          EX: 10, // 10s max lock duration
+          EX: 10, 
         });
         acquiredLock = lockRes === 'OK';
       } catch (err: any) {
@@ -102,7 +100,7 @@ export class CacheService {
       }
 
       if (!acquiredLock) {
-        // Another process is fetching; wait up to 4 iterations (600ms)
+       
         for (let i = 0; i < 4; i++) {
           await new Promise((resolve) => setTimeout(resolve, 150));
           const retryCached = await this.get<T>(key);
