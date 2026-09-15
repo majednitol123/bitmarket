@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "BitMarket",
-    "slug": "bitmarket",
+    "slug": "rn-crypto-wallet",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
