@@ -56,6 +56,17 @@ app.use((req, res, next) => {
 });
 
 // 5. System Health, Readiness & Telemetry (No rate limits on probes)
+app.get('/', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'crypto-aggregator-api',
+    health: '/health',
+    version: '1.0.0',
+  });
+});
+app.head('/', (_req, res) => {
+  res.status(200).end();
+});
 app.get('/health', systemController.getLiveness);
 app.get('/readiness', systemController.getReadiness);
 app.get('/metrics', systemController.getPrometheusMetrics);
