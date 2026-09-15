@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "605740861036",
+    "project_id": "crypto-167fa",
+    "storage_bucket": "crypto-167fa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:605740861036:android:6c7b44916ba96d434c7a49",
+        "android_client_info": {
+          "package_name": "com.bitmarket.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGZGV-ldBKTL2nPMha_C--iAr4uReVrYE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

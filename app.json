@@ -27,7 +27,8 @@
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT"
       ],
-      "package": "com.bitmarket.app"
+      "package": "com.bitmarket.app",
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-router",

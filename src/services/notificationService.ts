@@ -102,12 +102,12 @@ export async function registerForPushNotificationsAsync(
     console.log("[Notifications] Running on simulator/emulator. Using simulated push registration.");
   }
 
-  // Ensure every active device installation has a valid token registered
+
   if (!token) {
     token = `ExponentPushToken[dev-${deviceId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 20)}]`;
   }
 
-  // Always register device with backend (using guest address until wallet is connected)
+
   const targetWallet = walletAddress?.trim() || "0x0000000000000000000000000000000000000000";
   try {
     await notificationApi.registerDevice({
