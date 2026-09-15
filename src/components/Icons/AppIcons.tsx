@@ -215,14 +215,21 @@ export const HistoryIcon: React.FC<IconProps> = ({
 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <Path
-      d="M12 8V12L15 15"
+      d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
       stroke={color}
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
     />
     <Path
-      d="M3.05 11A9 9 0 1 1 5 18M3 11V6M3 11H8"
+      d="M3 3v5h5"
+      stroke={color}
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <Path
+      d="M12 7v5l4 2"
       stroke={color}
       strokeWidth={strokeWidth}
       strokeLinecap="round"
@@ -238,15 +245,27 @@ export const CoinsIcon: React.FC<IconProps> = ({
   strokeWidth = DEFAULT_STROKE,
 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <Circle cx="8" cy="8" r="6" stroke={color} strokeWidth={strokeWidth} />
-    <Path
-      d="M18.09 10.37A6 6 0 1 1 10.34 18.06"
+    {/* Primary coin */}
+    <Circle
+      cx="9"
+      cy="9"
+      r="7"
       stroke={color}
       strokeWidth={strokeWidth}
       strokeLinecap="round"
+      strokeLinejoin="round"
     />
+    {/* Coin inner symbol */}
     <Path
-      d="M7 6V10M5 8H9"
+      d="M9 5.5v7M7.5 7h3a1 1 0 0 1 0 2h-3a1 1 0 0 0 0 2h3"
+      stroke={color}
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Secondary coin stacked behind */}
+    <Path
+      d="M16 8a7 7 0 0 1 5 6.7c0 3.86-3.14 7-7 7a6.97 6.97 0 0 1-4.7-1.8"
       stroke={color}
       strokeWidth={strokeWidth}
       strokeLinecap="round"
@@ -262,21 +281,21 @@ export const YieldIcon: React.FC<IconProps> = ({
 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <Path
-      d="M12 2L2 7L12 12L22 7L12 2Z"
+      d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"
       stroke={color}
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
     />
     <Path
-      d="M2 17L12 22L22 17"
+      d="M22 17.65l-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"
       stroke={color}
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
     />
     <Path
-      d="M2 12L12 17L22 12"
+      d="M22 12.65l-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"
       stroke={color}
       strokeWidth={strokeWidth}
       strokeLinecap="round"
@@ -860,3 +879,28 @@ export const CloseIcon: React.FC<IconProps> = ({
     />
   </Svg>
 );
+
+// ─── 31. Rotate / Re-arm Icon ───
+export const RotateCcwIcon: React.FC<IconProps> = ({
+  size = DEFAULT_SIZE,
+  color = DEFAULT_COLOR,
+  strokeWidth = DEFAULT_STROKE,
+}) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M1 4V10H7"
+      stroke={color}
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <Path
+      d="M3.51 15A9 9 0 106.36 6.36L1 10"
+      stroke={color}
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+

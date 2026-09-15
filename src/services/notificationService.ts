@@ -173,7 +173,7 @@ export async function sendLocalNotification(
 export async function notifyWalletConnected(address: string): Promise<void> {
   const shortAddr = `${address.slice(0, 6)}...${address.slice(-4)}`;
   await sendLocalNotification(
-    "🔗 Account Connected",
+    " Account Connected",
     `Your account ${shortAddr} is now connected to BitMarket.`,
     { type: "wallet_connected", address }
   );
@@ -181,21 +181,9 @@ export async function notifyWalletConnected(address: string): Promise<void> {
 
 export async function notifyWalletDisconnected(): Promise<void> {
   await sendLocalNotification(
-    "🔓 Account Disconnected",
+    " Account Disconnected",
     "Your account has been disconnected from BitMarket.",
     { type: "wallet_disconnected" }
-  );
-}
-
-export async function notifySwapReady(
-  fromToken: string,
-  toToken: string,
-  amount: string
-): Promise<void> {
-  await sendLocalNotification(
-    "🔄 Swap Direction Updated",
-    `Ready to swap ${amount || "0"} ${fromToken} → ${toToken}`,
-    { type: "swap_ready", fromToken, toToken, amount }
   );
 }
 
@@ -209,14 +197,6 @@ export async function notifySwapExecuted(
     "⚡ Swap Executed",
     `Successfully swapped ${fromAmount} ${fromToken} for ${toAmount} ${toToken}`,
     { type: "swap_executed", fromToken, toToken, fromAmount, toAmount }
-  );
-}
-
-export async function notifyChainChanged(chainName: string): Promise<void> {
-  await sendLocalNotification(
-    "🌐 Network Switched",
-    `Active blockchain switched to ${chainName}`,
-    { type: "chain_changed", chainName }
   );
 }
 

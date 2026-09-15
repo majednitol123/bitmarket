@@ -263,12 +263,16 @@ export function buildPortfolioChartData(
 
     const dateObj = new Date(chunk[chunk.length - 1].timestamp);
     let timeLabel = `${dateObj.getHours().toString().padStart(2, '0')}:00`;
-    if (timeframe === '1W' || timeframe === '1M') {
+    if (timeframe === '1W') {
       const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       timeLabel = `${days[dateObj.getDay()]} ${dateObj.getHours().toString().padStart(2, '0')}:00`;
-    } else if (timeframe === '1Y' || timeframe === 'ALL') {
+    } else if (timeframe === '1M') {
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       timeLabel = `${months[dateObj.getMonth()]} ${dateObj.getDate()}`;
+    } else if (timeframe === '1Y' || timeframe === 'ALL') {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const yr = String(dateObj.getFullYear()).slice(2);
+      timeLabel = `${months[dateObj.getMonth()]} '${yr}`;
     }
 
     points.push({

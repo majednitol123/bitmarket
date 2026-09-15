@@ -23,6 +23,7 @@ import settingsReducer from "./settingsSlice";
 import connectedUserReducer from "./connectedUserSlice";
 import marketReducer from "./marketSlice";
 import portfolioReducer from "./portfolioSlice";
+import alertReducer from "./alertSlice";
 
 import { GeneralStatus } from "./types";
 
@@ -57,7 +58,7 @@ const walletPersistConfig = {
 const persistConfig = {
   key: "root",
   storage: AsyncStorage,
-  whitelist: ["biometrics", "settings", "market", "portfolio"],
+  whitelist: ["biometrics", "settings", "market", "portfolio", "alerts"],
 };
 
 const rootReducer = combineReducers({
@@ -67,6 +68,7 @@ const rootReducer = combineReducers({
   connectedUser: connectedUserReducer,
   market: marketReducer,
   portfolio: portfolioReducer,
+  alerts: alertReducer,
 });
 
 const resettableRootReducer = (state: any, action: any) => {

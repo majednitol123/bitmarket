@@ -2,18 +2,9 @@ import { alertService } from './alert.service';
 import { cacheService } from '../../cache/cacheService';
 import { cacheKeys } from '../../cache/cacheKeys';
 import { redisLock } from '../../cache/redisLock';
-import { notificationService } from '../notification/notification.service';
-import { marketService } from '../market/market.service';
 import { MarketToken } from '../market/market.types';
-import { PriceAlertRecord } from './alert.types';
 import { realtimePubSub } from '../realtime/realtimePubSub';
-
-function formatPrice(val: number): string {
-  if (val >= 1000) return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  if (val >= 1) return val.toFixed(2);
-  if (val >= 0.0001) return val.toFixed(4);
-  return val.toExponential(2);
-}
+import { metricsService } from '../system/metrics.service';
 
 export class PriceAlertWorker {
   private isRunning: boolean = false;
@@ -31,7 +22,7 @@ export class PriceAlertWorker {
   public start(): void {
     if (this.isRunning) return;
     this.isRunning = true;
-    console.log(`[PriceAlertWorker] Started alert evaluator loop (interval: ${this.intervalMs}ms)`);
+    console.log(`[PriceAlertWorker] Started enterprise alert evaluator loop (interval: ${this.intervalMs}ms)`);
 
     // Run first evaluation after 3 seconds
     this.timer = setTimeout(() => this.tick(), 3000);
@@ -73,169 +64,137 @@ export class PriceAlertWorker {
 
   /**
    * Evaluates all eligible alerts against the shared Redis market snapshot.
-   * Section 37 Guarantee: Zero provider requests per user; reads shared master snapshot only.
+   * Section 7, 24, 37 Guarantee:
+   * - Zero provider requests per user or per alert.
+   * - Consumes the shared Redis market snapshot (`cacheKeys.marketMasterTokens()`).
+   * - Rejects stale snapshot (>120s old) to protect against false triggers during provider outages.
+   * - True crossing & atomic row-locked evaluation with hysteresis and automatic re-arm.
    */
-  private async evaluateAlerts(): Promise<void> {
+  public async evaluateAlerts(): Promise<void> {
     const lockKey = 'locks:price_alert_worker';
     const ownerToken = redisLock.generateOwnerToken();
     const acquired = await redisLock.acquireLock(lockKey, 12, ownerToken);
 
     if (!acquired) {
-      // Lock held by another instance/thread
+      // Lock held by another instance
       return;
     }
 
     try {
-      // 1. Fetch eligible alerts from database
-      const eligibleAlerts = await alertService.getEligibleAlertsForEvaluation();
-      if (!eligibleAlerts || eligibleAlerts.length === 0) {
+      // 1. Read shared market master snapshot envelope from Redis
+      const envelope = await cacheService.readEnvelope<MarketToken[]>(cacheKeys.marketMasterTokens());
+      if (!envelope || !envelope.value || envelope.value.length === 0) {
+        console.warn('[PriceAlertWorker] No market master snapshot found in cache; skipping evaluation cycle');
         return;
       }
 
-      // 2. Read shared market master snapshot from Redis
-      let tokens = await cacheService.get<MarketToken[]>(cacheKeys.marketMasterTokens());
-      if (!tokens || tokens.length === 0) {
-        // Safe read from market service without external API storm
-        tokens = await marketService.getMasterTokenList(false);
-      }
+      const snapshotTimestamp = new Date(envelope.generatedAt).getTime();
+      const snapshotAgeMs = Date.now() - snapshotTimestamp;
 
-      if (!tokens || tokens.length === 0) {
+      // Section 24: Protect against stale data (>120s old)
+      if (snapshotAgeMs > 120000) {
+        console.warn(
+          `[PriceAlertWorker] Market snapshot is stale (${Math.round(snapshotAgeMs / 1000)}s old > 120s limit); skipping evaluation`
+        );
         return;
       }
 
-      // 3. Construct in-memory fast price lookup map
+      const tokens = envelope.value;
+
+      // 2. Build fast in-memory lookup map by tokenId, tokenSymbol, and tokenAddress
       const priceMap = new Map<string, number>();
       for (const token of tokens) {
         if (token.id && typeof token.priceUsd === 'number') {
-          priceMap.set(token.id.toLowerCase().trim(), token.priceUsd);
+          priceMap.set(`id:${token.id.toLowerCase().trim()}`, token.priceUsd);
         }
         if (token.symbol && typeof token.priceUsd === 'number') {
-          priceMap.set(token.symbol.toLowerCase().trim(), token.priceUsd);
+          priceMap.set(`sym:${token.symbol.toLowerCase().trim()}`, token.priceUsd);
+        }
+        if (token.contractAddress && typeof token.priceUsd === 'number') {
+          priceMap.set(`addr:${token.contractAddress.toLowerCase().trim()}`, token.priceUsd);
+        }
+        if (token.contractAddresses && Array.isArray(token.contractAddresses)) {
+          for (const ca of token.contractAddresses) {
+            if (ca.contractAddress && typeof token.priceUsd === 'number') {
+              priceMap.set(`addr:${ca.contractAddress.toLowerCase().trim()}`, token.priceUsd);
+            }
+          }
         }
       }
 
+      // 3. Batch retrieve eligible active/triggered alerts using token identifiers
+      const tokenIdentifiers = tokens.map((t) => ({ id: t.id, symbol: t.symbol }));
+      let offset = 0;
+      const pageSize = 500;
+      let evaluatedCount = 0;
       let triggeredCount = 0;
+      let rearmedCount = 0;
 
-      // 4. Evaluate each alert in-memory
-      for (const alert of eligibleAlerts) {
-        const tokenIdKey = alert.tokenId.toLowerCase().trim();
-        const symbolKey = alert.tokenSymbol.toLowerCase().trim();
-        const currentPrice = priceMap.get(tokenIdKey) ?? priceMap.get(symbolKey);
+      while (true) {
+        const batch = await alertService.getActiveAlertsForTokens(tokenIdentifiers, pageSize, offset);
+        if (!batch || batch.length === 0) break;
 
-        if (currentPrice === undefined || isNaN(currentPrice)) {
-          continue;
+        for (const alert of batch) {
+          // Resolve current price: prefer tokenAddress -> tokenId -> tokenSymbol
+          let currentPrice: number | undefined;
+          if (alert.tokenAddress) {
+            currentPrice = priceMap.get(`addr:${alert.tokenAddress.toLowerCase().trim()}`);
+          }
+          if (currentPrice === undefined && alert.tokenId) {
+            currentPrice = priceMap.get(`id:${alert.tokenId.toLowerCase().trim()}`);
+          }
+          if (currentPrice === undefined && alert.tokenSymbol) {
+            currentPrice = priceMap.get(`sym:${alert.tokenSymbol.toLowerCase().trim()}`);
+          }
+
+          if (currentPrice === undefined || isNaN(currentPrice) || currentPrice <= 0) {
+            continue;
+          }
+
+          evaluatedCount++;
+          try {
+            const evalResult = await alertService.evaluateAndTriggerAtomic(
+              alert.id,
+              currentPrice,
+              snapshotTimestamp
+            );
+
+            if (evalResult.triggered) {
+              triggeredCount++;
+              metricsService.recordAlert('triggered');
+            } else if (evalResult.rearmed) {
+              rearmedCount++;
+              metricsService.recordAlert('rearmed');
+              // Realtime broadcast of re-arm
+              await realtimePubSub.publish('price_alert', 'alert_rearmed', {
+                alertId: alert.id,
+                walletAddress: alert.walletAddress,
+                tokenSymbol: alert.tokenSymbol,
+                targetPrice: alert.targetPrice,
+                currentPrice,
+                status: 'ARMED',
+              });
+            } else {
+              metricsService.recordAlert('evaluated');
+            }
+          } catch (err: any) {
+            console.error(`[PriceAlertWorker] Error evaluating alert #${alert.id}:`, err.message);
+          }
         }
 
-        const isTriggered = this.checkCondition(alert, currentPrice);
-
-        if (isTriggered) {
-          triggeredCount++;
-          await this.triggerAlert(alert, currentPrice);
-        }
+        if (batch.length < pageSize) break;
+        offset += pageSize;
       }
 
-      if (triggeredCount > 0) {
-        console.log(`[PriceAlertWorker] Processed ${eligibleAlerts.length} eligible alerts, triggered ${triggeredCount}`);
+      if (evaluatedCount > 0) {
+        console.log(
+          `[PriceAlertWorker] Evaluated ${evaluatedCount} alerts against snapshot (${Math.round(
+            snapshotAgeMs / 1000
+          )}s old). Triggered: ${triggeredCount}, Auto-rearmed: ${rearmedCount}`
+        );
       }
     } finally {
       await redisLock.releaseLock(lockKey, ownerToken);
-    }
-  }
-
-  /**
-   * Checks if an alert threshold has been crossed
-   */
-  private checkCondition(alert: PriceAlertRecord, currentPrice: number): boolean {
-    switch (alert.condition) {
-      case 'above':
-        return currentPrice >= alert.targetPrice;
-
-      case 'below':
-        return currentPrice <= alert.targetPrice;
-
-      case 'pct_increase':
-        if (alert.basePrice && alert.basePrice > 0) {
-          const pct = ((currentPrice - alert.basePrice) / alert.basePrice) * 100;
-          return pct >= alert.targetPrice;
-        }
-        return currentPrice >= alert.targetPrice;
-
-      case 'pct_decrease':
-        if (alert.basePrice && alert.basePrice > 0) {
-          const pct = ((alert.basePrice - currentPrice) / alert.basePrice) * 100;
-          return pct >= alert.targetPrice;
-        }
-        return currentPrice <= alert.targetPrice;
-
-      default:
-        return false;
-    }
-  }
-
-  /**
-   * Emits a durable notification event and records the alert trigger in DB
-   */
-  private async triggerAlert(alert: PriceAlertRecord, currentPrice: number): Promise<void> {
-    try {
-      const cooldownMinutes = alert.cooldownMinutes;
-      const isOneShot = cooldownMinutes === 0;
-
-      // Deterministic idempotency key: prevents duplicate notifications within same cooldown window
-      const cooldownWindow = !isOneShot
-        ? Math.floor(Date.now() / (cooldownMinutes * 60 * 1000))
-        : 'once';
-      const idempotencyKey = `price_alert:${alert.id}:${cooldownWindow}`;
-
-      const symbol = alert.tokenSymbol.toUpperCase();
-      const currentFormatted = formatPrice(currentPrice);
-      const targetFormatted = formatPrice(alert.targetPrice);
-
-      let conditionText = 'target';
-      if (alert.condition === 'above') conditionText = `surpassed target of ≥ $${targetFormatted}`;
-      else if (alert.condition === 'below') conditionText = `dropped below target of ≤ $${targetFormatted}`;
-      else if (alert.condition === 'pct_increase') conditionText = `surged +${targetFormatted}%`;
-      else if (alert.condition === 'pct_decrease') conditionText = `dropped -${targetFormatted}%`;
-
-      const title = `🚨 ${symbol} Price Alert: $${currentFormatted}`;
-      const body = `${symbol} is currently $${currentFormatted} and has ${conditionText}!`;
-
-      console.log(`[PriceAlertWorker] Alert ${alert.id} triggered for ${symbol} ($${currentFormatted})`);
-
-      // 1. Create durable notification event
-      await notificationService.createNotificationEvent({
-        walletAddress: alert.walletAddress,
-        eventType: 'price_alert',
-        title,
-        body,
-        data: {
-          alertId: alert.id,
-          tokenId: alert.tokenId,
-          tokenSymbol: alert.tokenSymbol,
-          condition: alert.condition,
-          targetPrice: alert.targetPrice,
-          currentPrice,
-          basePrice: alert.basePrice,
-          cooldownMinutes: alert.cooldownMinutes,
-          triggeredAt: new Date().toISOString(),
-        },
-        idempotencyKey,
-      });
-
-      // 2. Record trigger in database (updates triggered_at and disables if one-shot)
-      await alertService.recordAlertTriggered(alert.id, isOneShot);
-
-      // 3. Publish real-time event to multi-instance Pub/Sub
-      await realtimePubSub.publish('price_alert', 'alert_triggered', {
-        alertId: alert.id,
-        walletAddress: alert.walletAddress,
-        tokenSymbol: alert.tokenSymbol,
-        condition: alert.condition,
-        targetPrice: alert.targetPrice,
-        currentPrice,
-        isOneShot,
-      });
-    } catch (err: any) {
-      console.error(`[PriceAlertWorker] Error triggering alert ${alert.id}:`, err.message);
     }
   }
 }

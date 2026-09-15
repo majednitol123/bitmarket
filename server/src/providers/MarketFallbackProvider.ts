@@ -10,11 +10,30 @@ import {
 } from '../modules/market/market.types';
 import { config } from '../config/env';
 
-/**
- * MarketFallbackProvider
- * Secondary market data provider using public CoinGecko v3 API.
- * Provides resilient fallback when primary CoinStats keys hit 429 quota exhaustion.
- */
+
+const BINANCE_SYMBOL_MAP: Record<string, string> = {
+  bitcoin: 'BTCUSDT',
+  btc: 'BTCUSDT',
+  ethereum: 'ETHUSDT',
+  eth: 'ETHUSDT',
+  solana: 'SOLUSDT',
+  sol: 'SOLUSDT',
+  binancecoin: 'BNBUSDT',
+  bnb: 'BNBUSDT',
+  'wrapped-bitcoin': 'BTCUSDT',
+  wbtc: 'BTCUSDT',
+  chainlink: 'LINKUSDT',
+  link: 'LINKUSDT',
+  uniswap: 'UNIUSDT',
+  uni: 'UNIUSDT',
+  'avalanche-2': 'AVAXUSDT',
+  avax: 'AVAXUSDT',
+  polygon: 'POLUSDT',
+  matic: 'POLUSDT',
+  pepe: '1000PEPEUSDT',
+  weth: 'ETHUSDT',
+};
+
 export class MarketFallbackProvider extends BaseProvider implements MarketDataProvider {
   private client: AxiosInstance;
 
@@ -151,6 +170,63 @@ export class MarketFallbackProvider extends BaseProvider implements MarketDataPr
     });
   }
 
+  private async fetchBinanceKlines(coinId: string, cleanPeriod: string): Promise<ChartResponse | null> {
+    const symbolKey = coinId.replace(/_ethereum|_solana|_polygon|_arbitrum/g, '').toLowerCase();
+    const binanceSymbol = BINANCE_SYMBOL_MAP[symbolKey];
+    if (!binanceSymbol) return null;
+
+    let interval = '1h';
+    let limit = 24;
+
+    if (cleanPeriod === '24h' || cleanPeriod === '1d') {
+      interval = '1h';
+      limit = 24;
+    } else if (cleanPeriod === '1w' || cleanPeriod === '7d') {
+      interval = '4h';
+      limit = 42;
+    } else if (cleanPeriod === '1m' || cleanPeriod === '30d') {
+      interval = '1d';
+      limit = 30;
+    } else if (cleanPeriod === '3m' || cleanPeriod === '90d') {
+      interval = '1d';
+      limit = 90;
+    } else if (cleanPeriod === '1y' || cleanPeriod === '365d') {
+      interval = '1w';
+      limit = 52;
+    } else if (cleanPeriod === 'all') {
+      interval = '1M';
+      limit = 60;
+    }
+
+    try {
+      const res = await axios.get('https://api.binance.com/api/v3/klines', {
+        params: {
+          symbol: binanceSymbol,
+          interval,
+          limit,
+        },
+        timeout: 5000,
+      });
+
+      if (!Array.isArray(res.data) || res.data.length === 0) return null;
+
+      const points = res.data.map((k: any) => ({
+        timestamp: Number(k[0]),
+        priceUsd: parseFloat(k[4]),
+        volume: parseFloat(k[5]) || 0,
+      }));
+
+      return {
+        tokenId: coinId,
+        period: cleanPeriod,
+        points,
+        updatedAt: new Date().toISOString(),
+      };
+    } catch {
+      return null;
+    }
+  }
+
   async getCoinChart(coinId: string, period: string = '1w'): Promise<ChartResponse> {
     const cleanId = coinId.trim().toLowerCase();
     const cleanPeriod = period.trim().toLowerCase();
@@ -165,7 +241,12 @@ export class MarketFallbackProvider extends BaseProvider implements MarketDataPr
 
     return this.executeWithResilience(`getCoinChart:${cleanId}:${cleanPeriod}`, async () => {
       try {
-        const res = await this.client.get(`/coins/${encodeURIComponent(cleanId)}/market_chart`, {
+        let endpoint = `/coins/${encodeURIComponent(cleanId)}/market_chart`;
+        if (cleanId.startsWith('0x') && cleanId.length === 42) {
+          endpoint = `/coins/ethereum/contract/${encodeURIComponent(cleanId)}/market_chart`;
+        }
+
+        const res = await this.client.get(endpoint, {
           params: {
             vs_currency: 'usd',
             days,
@@ -183,6 +264,13 @@ export class MarketFallbackProvider extends BaseProvider implements MarketDataPr
           };
         });
 
+        if (points.length === 0) {
+          const binanceFallback = await this.fetchBinanceKlines(cleanId, cleanPeriod);
+          if (binanceFallback && binanceFallback.points.length > 0) {
+            return binanceFallback;
+          }
+        }
+
         return {
           tokenId: cleanId,
           period: cleanPeriod,
@@ -190,6 +278,15 @@ export class MarketFallbackProvider extends BaseProvider implements MarketDataPr
           updatedAt: new Date().toISOString(),
         };
       } catch (err: any) {
+        try {
+          const binanceFallback = await this.fetchBinanceKlines(cleanId, cleanPeriod);
+          if (binanceFallback && binanceFallback.points.length > 0) {
+            return binanceFallback;
+          }
+        } catch {
+          // Continue to empty fallback
+        }
+
         return {
           tokenId: cleanId,
           period: cleanPeriod,

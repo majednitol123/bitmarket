@@ -157,9 +157,6 @@ export default function PortfolioScreen() {
   const handleSelectTimeframe = (tf: Timeframe) => {
     dispatch(setSelectedTimeframe(tf));
     setScrubPoint(null);
-    if (activeAddress) {
-      dispatch(fetchPortfolioChart({ chain: selectedChainState.id, address: activeAddress, range: tf }));
-    }
   };
 
   const handleOpenExplorer = (url: string) => {
@@ -380,13 +377,19 @@ export default function PortfolioScreen() {
           <TouchableOpacity
             style={[styles.tabButton, activeTab === "tokens" && styles.tabButtonActive]}
             onPress={() => setActiveTab("tokens")}
+            activeOpacity={0.75}
           >
             <CoinsIcon
-              size={14}
-              color={activeTab === "tokens" ? theme.colors.primaryLight : theme.colors.grey}
+              size={16}
+              color={activeTab === "tokens" ? "#FFFFFF" : theme.colors.lightGrey}
               strokeWidth={2}
             />
-            <Text style={[styles.tabText, activeTab === "tokens" && styles.tabTextActive]}>
+            <Text
+              style={[styles.tabText, activeTab === "tokens" && styles.tabTextActive]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+            >
               Holdings ({holdings.length})
             </Text>
           </TouchableOpacity>
@@ -394,13 +397,19 @@ export default function PortfolioScreen() {
           <TouchableOpacity
             style={[styles.tabButton, activeTab === "defi" && styles.tabButtonActive]}
             onPress={() => setActiveTab("defi")}
+            activeOpacity={0.75}
           >
             <YieldIcon
-              size={14}
-              color={activeTab === "defi" ? theme.colors.primaryLight : theme.colors.grey}
+              size={16}
+              color={activeTab === "defi" ? "#FFFFFF" : theme.colors.lightGrey}
               strokeWidth={2}
             />
-            <Text style={[styles.tabText, activeTab === "defi" && styles.tabTextActive]}>
+            <Text
+              style={[styles.tabText, activeTab === "defi" && styles.tabTextActive]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+            >
               DeFi Yield ({defiPositions.length})
             </Text>
           </TouchableOpacity>
@@ -408,13 +417,19 @@ export default function PortfolioScreen() {
           <TouchableOpacity
             style={[styles.tabButton, activeTab === "activity" && styles.tabButtonActive]}
             onPress={() => setActiveTab("activity")}
+            activeOpacity={0.75}
           >
             <HistoryIcon
-              size={14}
-              color={activeTab === "activity" ? theme.colors.primaryLight : theme.colors.grey}
+              size={16}
+              color={activeTab === "activity" ? "#FFFFFF" : theme.colors.lightGrey}
               strokeWidth={2}
             />
-            <Text style={[styles.tabText, activeTab === "activity" && styles.tabTextActive]}>
+            <Text
+              style={[styles.tabText, activeTab === "activity" && styles.tabTextActive]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+            >
               Swap History ({combinedActivities.length})
             </Text>
           </TouchableOpacity>
@@ -804,24 +819,33 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       borderRadius: 14,
       borderWidth: 1,
       borderColor: theme.colors.border,
-      padding: 4,
+      padding: 3,
+      alignItems: "center",
     },
     tabButton: {
       flex: 1,
       paddingVertical: 9,
+      paddingHorizontal: 6,
       alignItems: "center",
       borderRadius: 10,
       flexDirection: "row",
       justifyContent: "center",
-      gap: 6,
+      gap: 5,
     },
     tabButtonActive: {
       backgroundColor: theme.colors.primary,
+      shadowColor: theme.colors.primary,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.35,
+      shadowRadius: 5,
+      elevation: 3,
     },
     tabText: {
       color: theme.colors.lightGrey,
-      fontSize: 12,
+      fontSize: 11.5,
       fontWeight: "600",
+      letterSpacing: -0.2,
+      flexShrink: 1,
     },
     tabTextActive: {
       color: "#FFFFFF",

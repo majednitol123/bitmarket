@@ -579,6 +579,8 @@ export default function TokenDetailScreen() {
         tokenId={coinId}
         tokenSymbol={tokenDetail?.symbol || initialSymbol}
         tokenName={tokenDetail?.name || initialName}
+        chain={tokenDetail?.contractAddresses?.[0]?.blockchain || "ethereum"}
+        tokenAddress={tokenDetail?.contractAddress || tokenDetail?.contractAddresses?.[0]?.contractAddress}
         currentPrice={
           tokenDetail?.priceUsd ||
           (params.price ? parseFloat(params.price.replace(/[^0-9.]/g, "")) : 0)

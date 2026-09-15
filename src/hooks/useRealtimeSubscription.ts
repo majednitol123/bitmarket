@@ -14,6 +14,11 @@ import {
   selectRealtimeConnected,
   selectSnapshotVersion,
 } from '../store/marketSlice';
+import {
+  alertTriggeredRealtime,
+  alertRearmedRealtime,
+} from '../store/alertSlice';
+import Toast from 'react-native-toast-message';
 import { useAccount } from '@reown/appkit-react-native';
 
 export function useRealtimeSubscription() {
@@ -68,6 +73,36 @@ export function useRealtimeSubscription() {
           );
         } else if (msg.resource === 'market:overview') {
           dispatch(fetchMarketOverview({ forceRefresh: false }));
+        }
+      }
+
+      if (msg.resource === 'price_alert') {
+        if (msg.eventType === 'alert_triggered') {
+          const { alertId, tokenSymbol, currentPrice, status, isOneShot } = msg.metadata || {};
+          dispatch(
+            alertTriggeredRealtime({
+              alertId,
+              tokenSymbol,
+              currentPrice,
+              status,
+              isOneShot,
+            })
+          );
+          Toast.show({
+            type: 'info',
+            text1: `🚨 ${tokenSymbol || 'Crypto'} Price Alert!`,
+            text2: `${tokenSymbol || 'Token'} reached $${
+              typeof currentPrice === 'number'
+                ? currentPrice >= 1
+                  ? currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  : currentPrice.toFixed(6)
+                : currentPrice
+            }`,
+            visibilityTime: 6000,
+          });
+        } else if (msg.eventType === 'alert_rearmed') {
+          const { alertId, currentPrice } = msg.metadata || {};
+          dispatch(alertRearmedRealtime({ alertId, currentPrice }));
         }
       }
     });

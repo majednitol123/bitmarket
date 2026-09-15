@@ -458,26 +458,49 @@ export class PortfolioService {
         }
 
         // 1. Check for stored PostgreSQL snapshots first
+        // Snapshots can ONLY be used if they cover a meaningful portion of the requested timeframe!
+        const now = Date.now();
+        let minSpanMs = 0;
         let fromDate: Date;
-        if (upperTf === '1D') fromDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        else if (upperTf === '1W') fromDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        else if (upperTf === '1M') fromDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        else if (upperTf === '1Y') fromDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
-        else fromDate = new Date(0);
+
+        if (upperTf === '1D') {
+          minSpanMs = 18 * 60 * 60 * 1000; // at least 18 hours span
+          fromDate = new Date(now - 24 * 60 * 60 * 1000);
+        } else if (upperTf === '1W') {
+          minSpanMs = 5 * 24 * 60 * 60 * 1000; // at least 5 days span
+          fromDate = new Date(now - 7 * 24 * 60 * 60 * 1000);
+        } else if (upperTf === '1M') {
+          minSpanMs = 21 * 24 * 60 * 60 * 1000; // at least 21 days span
+          fromDate = new Date(now - 30 * 24 * 60 * 60 * 1000);
+        } else if (upperTf === '1Y') {
+          minSpanMs = 180 * 24 * 60 * 60 * 1000; // at least 6 months span
+          fromDate = new Date(now - 365 * 24 * 60 * 60 * 1000);
+        } else {
+          minSpanMs = 180 * 24 * 60 * 60 * 1000; // ALL: at least 6 months
+          fromDate = new Date(0);
+        }
 
         const snapshots = await snapshotService.getSnapshots(normChain, targetAddress, fromDate);
         if (snapshots.length >= 8) {
-          return buildPortfolioChartData(upperTf, snapshots);
+          const sorted = [...snapshots].sort((a, b) => a.timestamp - b.timestamp);
+          const actualSpanMs = sorted[sorted.length - 1].timestamp - sorted[0].timestamp;
+          if (actualSpanMs >= minSpanMs) {
+            return buildPortfolioChartData(upperTf, sorted);
+          }
         }
 
-        // 2. If insufficient snapshots, compute from top token real price histories
-        const topHoldings = holdings.slice(0, 5);
-
+        // 2. If snapshots don't span the timeframe, compute from real token market price histories
         let period = '24h';
         if (upperTf === '1W') period = '1w';
         else if (upperTf === '1M') period = '1m';
         else if (upperTf === '1Y') period = '1y';
         else if (upperTf === 'ALL') period = 'all';
+
+        // Select top holdings with value, sorted descending
+        const topHoldings = holdings
+          .filter((h) => (h.valueUsd || 0) > 0 && h.amount > 0)
+          .sort((a, b) => (b.valueUsd || 0) - (a.valueUsd || 0))
+          .slice(0, 3); // Top 3 holdings capture 85-95% of value without hitting upstream rate limits
 
         try {
           const chartPromises = topHoldings.map(async (h) => {
@@ -485,6 +508,7 @@ export class PortfolioService {
               const chartData = await marketService.getTokenChart(h.coinId, period);
               return {
                 amount: h.amount,
+                valueUsd: h.valueUsd || 0,
                 points: chartData.points,
               };
             } catch {
@@ -493,30 +517,63 @@ export class PortfolioService {
           });
 
           const results = await Promise.all(chartPromises);
-          const validResults = results.filter(
+          let validResults = results.filter(
             (r): r is NonNullable<typeof r> => r !== null && r.points.length > 0
           );
 
+          // If top holdings charts were unavailable (e.g. unknown contract IDs), try native chain token
           if (validResults.length === 0) {
-            // No valid historical points available: return clean empty chart per Section 22
+            const nativeAsset = normChain === 'solana' ? 'solana' : 'ethereum';
+            try {
+              const nativeChart = await marketService.getTokenChart(nativeAsset, period);
+              if (nativeChart && nativeChart.points && nativeChart.points.length > 0) {
+                const currentTotal = portfolio.summary.totalValueUsd || 1;
+                const lastNativePrice = nativeChart.points[nativeChart.points.length - 1]?.priceUsd || 1;
+                validResults = [
+                  {
+                    amount: currentTotal / lastNativePrice,
+                    valueUsd: currentTotal,
+                    points: nativeChart.points,
+                  },
+                ];
+              }
+            } catch {
+              // Ignore native fallback failure
+            }
+          }
+
+          if (validResults.length === 0) {
+            // Only fall back to snapshots if they cover the minimum timeframe span
+            if (snapshots.length >= 2) {
+              const sorted = [...snapshots].sort((a, b) => a.timestamp - b.timestamp);
+              const actualSpanMs = sorted[sorted.length - 1].timestamp - sorted[0].timestamp;
+              if (actualSpanMs >= minSpanMs) {
+                return buildPortfolioChartData(upperTf, sorted);
+              }
+            }
             return buildPortfolioChartData(upperTf, []);
           }
 
-          // Align timestamps using the first valid result's points
-          const basePoints = validResults[0].points;
-          const aggregatedPoints: { timestamp: number; value: number }[] = basePoints.map((basePt, idx) => {
+          // Pick the valid result with the longest points array as the timeline anchor
+          const anchorResult = validResults.reduce((best, curr) =>
+            curr.points.length > best.points.length ? curr : best, validResults[0]
+          );
+          const basePoints = anchorResult.points;
+
+          const aggregatedPoints: { timestamp: number; value: number }[] = basePoints.map((basePt) => {
             let totalUsdAtTime = 0;
+            let totalWeights = 0;
+
             for (const item of validResults) {
-              const pt = item.points[idx] || item.points[item.points.length - 1];
-              totalUsdAtTime += item.amount * (pt?.priceUsd || 0);
+              const pt = this.findClosestPoint(item.points, basePt.timestamp);
+              if (pt) {
+                totalUsdAtTime += item.amount * pt.priceUsd;
+                totalWeights += item.valueUsd;
+              }
             }
 
-            const modeledFraction =
-              topHoldings
-                .slice(0, validResults.length)
-                .reduce((s, h) => s + (h.valueUsd || 0), 0) / (portfolio.summary.totalValueUsd || 1);
-
-            const totalEstimated = modeledFraction > 0 ? totalUsdAtTime / modeledFraction : totalUsdAtTime;
+            const modeledFraction = totalWeights / (portfolio.summary.totalValueUsd || 1);
+            const totalEstimated = modeledFraction > 0.1 ? totalUsdAtTime / modeledFraction : totalUsdAtTime;
 
             return {
               timestamp: basePt.timestamp,
@@ -527,11 +584,35 @@ export class PortfolioService {
           return buildPortfolioChartData(upperTf, aggregatedPoints);
         } catch (err: any) {
           console.warn('[PortfolioService] Error computing portfolio chart:', err.message);
+          if (snapshots.length >= 2) {
+            const sorted = [...snapshots].sort((a, b) => a.timestamp - b.timestamp);
+            return buildPortfolioChartData(upperTf, sorted);
+          }
           return buildPortfolioChartData(upperTf, []);
         }
       },
       { source: 'portfolio_chart' }
     );
+  }
+
+  /**
+   * Finds the closest data point by timestamp in an array of points
+   */
+  private findClosestPoint(
+    points: { timestamp: number; priceUsd: number }[],
+    targetTs: number
+  ): { timestamp: number; priceUsd: number } | null {
+    if (!points || points.length === 0) return null;
+    let closest = points[0];
+    let minDiff = Math.abs(points[0].timestamp - targetTs);
+    for (let i = 1; i < points.length; i++) {
+      const diff = Math.abs(points[i].timestamp - targetTs);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = points[i];
+      }
+    }
+    return closest;
   }
 
   /**

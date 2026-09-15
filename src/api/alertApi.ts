@@ -2,32 +2,43 @@ import axios from 'axios';
 import { getApiBaseUrl } from './apiConfig';
 
 export type AlertCondition = 'above' | 'below' | 'pct_increase' | 'pct_decrease';
+export type AlertStatus = 'ARMED' | 'TRIGGERED' | 'DISABLED';
 
 export interface PriceAlert {
   id: number;
   walletAddress: string;
+  chain?: string;
+  tokenAddress?: string;
   tokenId: string;
   tokenSymbol: string;
   tokenName: string | null;
   condition: AlertCondition;
   targetPrice: number;
   basePrice: number | null;
+  currency: string;
   cooldownMinutes: number;
+  cooldownUntil: string | null;
+  status: AlertStatus;
   enabled: boolean;
   triggeredAt: string | null;
   triggerCount: number;
+  lastEvaluatedPrice: number | null;
+  lastEvaluatedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CreateAlertParams {
   walletAddress: string;
+  chain?: string;
+  tokenAddress?: string;
   tokenId: string;
   tokenSymbol: string;
   tokenName?: string;
   condition: AlertCondition;
   targetPrice: number;
   basePrice?: number;
+  currency?: string;
   cooldownMinutes?: number;
 }
 
@@ -36,6 +47,7 @@ export interface UpdateAlertParams {
   condition?: AlertCondition;
   cooldownMinutes?: number;
   enabled?: boolean;
+  status?: AlertStatus;
 }
 
 export const alertApi = {
@@ -52,13 +64,18 @@ export const alertApi = {
   },
 
   /**
-   * Retrieves all alerts for a wallet, optionally filtered by token
+   * Retrieves all alerts for a wallet, optionally filtered by tokenId, status, or chain
    */
-  async getAlerts(walletAddress: string, tokenId?: string): Promise<PriceAlert[]> {
+  async getAlerts(
+    walletAddress: string,
+    tokenId?: string,
+    status?: AlertStatus,
+    chain?: string
+  ): Promise<PriceAlert[]> {
     const res = await axios.get<{ success: boolean; data: PriceAlert[] }>(
       `${getApiBaseUrl()}/api/alerts`,
       {
-        params: { walletAddress, tokenId },
+        params: { walletAddress, tokenId, status, chain },
         timeout: 8000,
       }
     );
@@ -96,7 +113,7 @@ export const alertApi = {
   },
 
   /**
-   * Re-arms a triggered or disabled alert
+   * Re-arms a triggered or disabled alert (Section 11 & 35)
    */
   async rearmAlert(id: number, walletAddress: string): Promise<PriceAlert> {
     const res = await axios.post<{ success: boolean; data: PriceAlert }>(

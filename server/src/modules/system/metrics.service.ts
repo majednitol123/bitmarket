@@ -43,6 +43,18 @@ export class MetricsService {
     failed: 0,
   };
 
+  // Price alert metrics (price_alrert.md Section 29)
+  private alertStats = {
+    created: 0,
+    updated: 0,
+    deleted: 0,
+    evaluated: 0,
+    triggered: 0,
+    crossingDetected: 0,
+    cooldownSkipped: 0,
+    rearmed: 0,
+  };
+
   // Worker run metrics
   private workerMetrics: Map<string, { runs: number; failures: number; totalDurationMs: number; lastDurationMs: number }> = new Map();
 
@@ -106,6 +118,15 @@ export class MetricsService {
   ): void {
     if (this.notificationStats[event] !== undefined) {
       this.notificationStats[event] += count;
+    }
+  }
+
+  /**
+   * Record price alert lifecycle events (price_alrert.md Section 29)
+   */
+  public recordAlert(event: 'created' | 'updated' | 'deleted' | 'evaluated' | 'triggered' | 'crossingDetected' | 'cooldownSkipped' | 'rearmed', count: number = 1): void {
+    if (this.alertStats[event] !== undefined) {
+      this.alertStats[event] += count;
     }
   }
 
@@ -192,6 +213,7 @@ export class MetricsService {
       providers: providerMetrics,
       swaps: this.swapStats,
       notifications: this.notificationStats,
+      alerts: this.alertStats,
       workers: workerSummary,
       realtime: realtimeStats,
     };
@@ -258,6 +280,14 @@ export class MetricsService {
     lines.push(`crypto_swaps_total{status="confirmed"} ${summary.swaps.confirmed}`);
     lines.push(`crypto_swaps_total{status="failed"} ${summary.swaps.failed}`);
     lines.push(`crypto_swaps_total{status="pending"} ${summary.swaps.pending}`);
+
+    // Alerts
+    lines.push('# HELP crypto_alerts_total Total price alert operations');
+    lines.push('# TYPE crypto_alerts_total counter');
+    lines.push(`crypto_alerts_total{status="created"} ${summary.alerts.created}`);
+    lines.push(`crypto_alerts_total{status="triggered"} ${summary.alerts.triggered}`);
+    lines.push(`crypto_alerts_total{status="evaluated"} ${summary.alerts.evaluated}`);
+    lines.push(`crypto_alerts_total{status="rearmed"} ${summary.alerts.rearmed}`);
 
     // Memory
     lines.push('# HELP crypto_process_memory_bytes Node.js memory consumption');

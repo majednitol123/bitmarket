@@ -11,6 +11,7 @@ export type RealtimeResource =
 export type RealtimeEventType =
   | 'snapshot_updated'
   | 'alert_triggered'
+  | 'alert_rearmed'
   | 'swap_confirmed'
   | 'swap_failed'
   | 'heartbeat'
