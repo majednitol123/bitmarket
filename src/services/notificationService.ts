@@ -1,6 +1,7 @@
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import * as Crypto from "expo-crypto";
+import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import { store } from "../store";
@@ -86,8 +87,11 @@ export async function registerForPushNotificationsAsync(
 
       if (finalStatus === "granted") {
         try {
+          const resolvedProjectId =
+            Constants?.expoConfig?.extra?.eas?.projectId ??
+            "e1be9487-1fd2-4e4b-8c20-8dd1a0ed410a";
           const pushToken = await Notifications.getExpoPushTokenAsync({
-            projectId: "7e6399b3-7de1-4548-bfe8-7d91129eeeeb",
+            projectId: resolvedProjectId,
           });
           token = pushToken.data;
           console.log("[Notifications] Expo Push Token:", token);

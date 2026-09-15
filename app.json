@@ -1,13 +1,12 @@
 {
   "expo": {
     "name": "BitMarket",
-    "slug": "rn-crypto-wallet",
+    "slug": "bitmarket",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "automatic",
     "scheme": "bitmarket",
-
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -16,7 +15,6 @@
       "bundleIdentifier": "com.bitmarket.app"
     },
     "android": {
-
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon-foreground.png",
         "backgroundColor": "#FFFFFF"
@@ -62,7 +60,8 @@
         {
           "android": {
             "enableProguardInReleaseBuilds": true,
-            "enableSeparateBuildPerCPUArchitecture": true
+            "enableSeparateBuildPerCPUArchitecture": true,
+            "enableMinifyInReleaseBuilds": true
           },
           "ios": {
             "deploymentTarget": "16.4"
@@ -96,7 +95,7 @@
         "origin": false
       },
       "eas": {
-        "projectId": "7e6399b3-7de1-4548-bfe8-7d91129eeeeb"
+        "projectId": "e1be9487-1fd2-4e4b-8c20-8dd1a0ed410a"
       }
     },
     "owner": "majedur70831"
