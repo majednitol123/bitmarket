@@ -1,5 +1,5 @@
 -- 003_notification_infrastructure.sql
--- Phase 6: Durable notification infrastructure for devices, events, deliveries, tickets, receipts, and retries.
+
 
 -- 1. Notification Devices table: Stores user push tokens, device IDs, and active status
 CREATE TABLE IF NOT EXISTS notification_devices (

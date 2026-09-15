@@ -10,13 +10,7 @@ import {
 } from "../services/notificationService";
 import * as Notifications from "expo-notifications";
 
-/**
- * Hook to manage push notification lifecycle:
- * - Registers for push notifications on mount & authenticates device with backend
- * - Syncs wallet address & notification preferences with backend database
- * - Fires local alerts when wallet connects/disconnects (if enabled)
- * - Sets up notification response listener (tap handler)
- */
+
 export function useWalletNotifications() {
   const { address, isConnected } = useAccount();
   const prevConnected = useRef<boolean>(false);
@@ -27,7 +21,7 @@ export function useWalletNotifications() {
     (state: RootState) => state.settings?.notificationsEnabled ?? true
   );
 
-  // ─── Register for push notifications on mount & when wallet updates ───
+
   useEffect(() => {
     let isMounted = true;
 
