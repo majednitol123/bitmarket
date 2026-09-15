@@ -5,6 +5,7 @@
   "scripts": {
     "start": "NODE_OPTIONS='--no-experimental-strip-types' expo start -c",
     "android": "node scripts/fix-android-build.js && NODE_OPTIONS='--no-experimental-strip-types' expo run:android",
+    "android:release": "node scripts/fix-android-build.js && NODE_OPTIONS='--no-experimental-strip-types' expo run:android --variant release",
     "ios": "node scripts/fix-ios-splash.js && NODE_OPTIONS='--no-experimental-strip-types' expo run:ios",
     "web": "NODE_OPTIONS='--no-experimental-strip-types' expo start --web -c",
     "prebuild": "expo prebuild",
