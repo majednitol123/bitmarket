@@ -93,12 +93,36 @@ export class ExchangeProvider extends BaseProvider {
       trimmed.toLowerCase() === 'native' ||
       trimmed.toUpperCase() === 'ETH' ||
       trimmed.toUpperCase() === 'MATIC' ||
+      trimmed.toUpperCase() === 'POL' ||
       trimmed.toUpperCase() === 'BNB' ||
-      trimmed.toUpperCase() === 'AVAX'
+      trimmed.toUpperCase() === 'AVAX' ||
+      trimmed.toUpperCase() === 'SOL'
     ) {
       return NATIVE_TOKEN_ADDRESS;
     }
     return trimmed;
+  }
+
+  /**
+   * Resiliently resolves a token symbol or address to its verified on-chain contract address.
+   */
+  public async resolveTokenAddress(chainId: number, token: string): Promise<string> {
+    const normalized = this.normalizeTokenAddress(token);
+    if (normalized === NATIVE_TOKEN_ADDRESS || /^0x[a-fA-F0-9]{40}$/.test(normalized)) {
+      return normalized;
+    }
+    // Attempt live resolution via LiFi /token endpoint
+    try {
+      const res = await this.client.get('/token', {
+        params: { chain: chainId, token: normalized },
+      });
+      if (res.data?.address && /^0x[a-fA-F0-9]{40}$/.test(res.data.address)) {
+        return res.data.address;
+      }
+    } catch {
+      // Fallback
+    }
+    return normalized;
   }
 
   /**
@@ -141,8 +165,8 @@ export class ExchangeProvider extends BaseProvider {
   public async getQuote(params: ExchangeQuoteRequest): Promise<ExchangeQuoteResponse> {
     const fromChainId = this.normalizeChainId(params.fromChain);
     const toChainId = this.normalizeChainId(params.toChain);
-    const fromTokenAddress = this.normalizeTokenAddress(params.fromToken);
-    const toTokenAddress = this.normalizeTokenAddress(params.toToken);
+    const fromTokenAddress = await this.resolveTokenAddress(fromChainId, params.fromToken);
+    const toTokenAddress = await this.resolveTokenAddress(toChainId, params.toToken);
     const isBridge: RouteType = fromChainId === toChainId ? 'swap' : 'bridge';
 
     // Guess token decimals for input
@@ -238,8 +262,8 @@ export class ExchangeProvider extends BaseProvider {
   public async buildTransaction(params: BuildTxRequest): Promise<BuildTxResponse> {
     const fromChainId = this.normalizeChainId(params.fromChain);
     const toChainId = this.normalizeChainId(params.toChain);
-    const fromTokenAddress = this.normalizeTokenAddress(params.fromToken);
-    const toTokenAddress = this.normalizeTokenAddress(params.toToken);
+    const fromTokenAddress = await this.resolveTokenAddress(fromChainId, params.fromToken);
+    const toTokenAddress = await this.resolveTokenAddress(toChainId, params.toToken);
     const isBridge: RouteType = fromChainId === toChainId ? 'swap' : 'bridge';
 
     const fromDecimals = this.guessDecimals(params.fromToken);

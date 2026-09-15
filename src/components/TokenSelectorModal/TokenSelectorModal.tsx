@@ -35,6 +35,60 @@ interface TokenSelectorModalProps {
 
 // ═══════════════════════════════════════════════════════════
 // COMPONENT
+interface TokenRowItemProps {
+  item: Token;
+  isFavorite: boolean;
+  styles: ReturnType<typeof createStyles>;
+  onSelect: (item: Token) => void;
+  onToggleFavorite: (symbol: string) => void;
+}
+
+const TokenRowItem = React.memo<TokenRowItemProps>(
+  function TokenRowItem({ item, isFavorite, styles, onSelect, onToggleFavorite }) {
+    return (
+      <TouchableOpacity
+        style={styles.tokenRow}
+        onPress={() => onSelect(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.tokenRowLeft}>
+          <BlockchainIcon
+            symbol={item.symbol}
+            size={40}
+            logoUrl={item.icon}
+          />
+          <View>
+            <Text style={styles.tokenSymbol}>{item.symbol}</Text>
+            <Text style={styles.tokenName}>{item.name}</Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          onPress={() => onToggleFavorite(item.symbol)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text
+            style={[
+              styles.favoriteIcon,
+              isFavorite && styles.favoriteIconActive,
+            ]}
+          >
+            ☆
+          </Text>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    );
+  },
+  (prev, next) =>
+    prev.item.address === next.item.address &&
+    prev.item.symbol === next.item.symbol &&
+    prev.isFavorite === next.isFavorite &&
+    prev.styles === next.styles &&
+    prev.onSelect === next.onSelect &&
+    prev.onToggleFavorite === next.onToggleFavorite
+);
+
+// ═══════════════════════════════════════════════════════════
+// COMPONENT
 // ═══════════════════════════════════════════════════════════
 
 export function TokenSelectorModal({
@@ -54,43 +108,20 @@ export function TokenSelectorModal({
 
   const renderToken = React.useCallback(
     ({ item }: { item: Token }) => (
-      <TouchableOpacity
-        style={styles.tokenRow}
-        onPress={() => onSelect(item)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.tokenRowLeft}>
-          <BlockchainIcon
-            symbol={item.symbol}
-            size={40}
-            logoUrl={item.icon}
-          />
-          <View>
-            <Text style={styles.tokenSymbol}>{item.symbol}</Text>
-            <Text style={styles.tokenName}>{item.name}</Text>
-            {item.address !== "native" && (
-              <Text style={styles.tokenAddress}>
-                {item.address.slice(0, 6)}...{item.address.slice(-4)}
-              </Text>
-            )}
-          </View>
-        </View>
-        <TouchableOpacity
-          onPress={() => onToggleFavorite(item.symbol)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Text
-            style={[
-              styles.favoriteIcon,
-              favorites.includes(item.symbol) && styles.favoriteIconActive,
-            ]}
-          >
-            ☆
-          </Text>
-        </TouchableOpacity>
-      </TouchableOpacity>
+      <TokenRowItem
+        item={item}
+        isFavorite={favorites.includes(item.symbol)}
+        styles={styles}
+        onSelect={onSelect}
+        onToggleFavorite={onToggleFavorite}
+      />
     ),
     [styles, favorites, onSelect, onToggleFavorite]
+  );
+
+  const getItemLayout = React.useCallback(
+    (_: any, index: number) => ({ length: 65, offset: 65 * index, index }),
+    []
   );
 
   return (
@@ -155,6 +186,10 @@ export function TokenSelectorModal({
             keyExtractor={(item) => item.address}
             style={styles.tokenList}
             renderItem={renderToken}
+            initialNumToRender={12}
+            maxToRenderPerBatch={10}
+            windowSize={5}
+            getItemLayout={getItemLayout}
           />
         </View>
       </View>

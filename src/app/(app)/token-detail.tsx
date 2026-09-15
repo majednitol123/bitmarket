@@ -33,8 +33,12 @@ import Header from "../../components/Header/Header";
 import { BlockchainIcon } from "../../components/BlockchainIcon/BlockchainIcon";
 import { marketApi, MarketToken, ChartPoint } from "../../api/marketApi";
 import { formatCompactNumber, formatPrice, formatPercent } from "../../utils/formatters";
+import { useDispatch } from "react-redux";
+import { AppDispatch } from "../../store";
 import { SwapIcon, CopyIcon, BellIcon } from "../../components/Icons/AppIcons";
 import { PriceAlertModal } from "../../components/PriceAlertModal";
+import { resolveTokenForSwap } from "../../utils/tokenResolution";
+import { setPendingSwapFromToken } from "../../store/swapSlice";
 
 const TIMEFRAMES = ["1D", "1W", "1M", "3M", "1Y", "ALL"] as const;
 type Timeframe = typeof TIMEFRAMES[number];
@@ -82,6 +86,7 @@ export default function TokenDetailScreen() {
   const theme = useTheme() as ThemeType;
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(theme, insets), [theme, insets]);
+  const dispatch = useDispatch<AppDispatch>();
 
   const params = useLocalSearchParams<{
     coinId: string;
@@ -242,7 +247,33 @@ export default function TokenDetailScreen() {
     });
   };
 
-  const handleTrade = () => {
+  const handleTrade = async () => {
+    try {
+      const resolved = await resolveTokenForSwap({
+        symbol: tokenDetail?.symbol || initialSymbol,
+        name: tokenDetail?.name || initialName,
+        coinId,
+        contractAddress:
+          tokenDetail?.contractAddress ||
+          tokenDetail?.contractAddresses?.[0]?.contractAddress,
+        contractAddresses: tokenDetail?.contractAddresses,
+        logoUrl: tokenDetail?.logoUrl || params.icon,
+        chainId: "1",
+      });
+
+      dispatch(
+        setPendingSwapFromToken({
+          symbol: resolved.token.symbol,
+          name: resolved.token.name,
+          address: resolved.token.address,
+          chainId: resolved.chain.id,
+          logoUrl: resolved.token.icon,
+          color: resolved.token.color,
+        })
+      );
+    } catch (e) {
+      console.warn("Failed to resolve token for trade:", e);
+    }
     router.replace("/(app)");
   };
 

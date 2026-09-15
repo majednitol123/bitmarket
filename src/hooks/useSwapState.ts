@@ -9,6 +9,7 @@ import {
   setDeadline as setDeadlineAction,
   setExpertMode as setExpertModeAction,
 } from "../store/settingsSlice";
+import { clearPendingSwapToken } from "../store/swapSlice";
 import { fetchMarketTokens } from "../store/marketSlice";
 import {
   CHAINS,
@@ -34,6 +35,9 @@ export const DEADLINE_OPTIONS = ["5", "10", "20", "30"];
 export function useSwapState() {
   const dispatch = useDispatch<AppDispatch>();
   const settings = useSelector((state: RootState) => state.settings);
+  const pendingFromToken = useSelector(
+    (state: RootState) => (state as any).swap?.pendingFromToken
+  );
 
   // Default tokens for initial chain (ETH and USDT on Ethereum)
   const defaultFrom = TOKENS_BY_CHAIN["1"]?.[0] || null; // ETH
@@ -106,6 +110,51 @@ export function useSwapState() {
   useEffect(() => {
     dispatch(fetchMarketTokens({ page: 1, limit: 50, category: 'All' }));
   }, [dispatch]);
+
+  // Handle external token selection (from Market, Portfolio, or Token Detail)
+  useEffect(() => {
+    if (!pendingFromToken) return;
+
+    const targetChain =
+      CHAINS.find((c) => c.id === pendingFromToken.chainId) || CHAINS[0];
+    const regTokens = TOKENS_BY_CHAIN[targetChain.id] || [];
+
+    const matched = regTokens.find(
+      (t) =>
+        (pendingFromToken.address !== "native" &&
+          t.address.toLowerCase() === pendingFromToken.address.toLowerCase()) ||
+        t.symbol.toUpperCase() === pendingFromToken.symbol.toUpperCase()
+    );
+
+    const tokenToSet: Token = matched || {
+      symbol: pendingFromToken.symbol.toUpperCase(),
+      name: pendingFromToken.name || pendingFromToken.symbol,
+      color: pendingFromToken.color || "#8B5CF6",
+      icon: pendingFromToken.logoUrl || "",
+      address: pendingFromToken.address || "native",
+    };
+
+    setSelectedChainFrom(targetChain);
+    setSelectedTokenFrom(tokenToSet);
+
+    // If destination token is identical, switch to a complementary asset
+    if (
+      selectedTokenTo &&
+      selectedTokenTo.symbol.toUpperCase() === tokenToSet.symbol.toUpperCase()
+    ) {
+      const altToken =
+        tokenToSet.symbol.toUpperCase() === "USDT"
+          ? regTokens.find((t) => t.symbol === "ETH" || t.symbol === "USDC") ||
+            TOKENS_BY_CHAIN["1"]?.[0]
+          : regTokens.find((t) => t.symbol === "USDT" || t.symbol === "USDC") ||
+            TOKENS_BY_CHAIN["1"]?.[1];
+      if (altToken) {
+        setSelectedTokenTo(altToken);
+      }
+    }
+
+    dispatch(clearPendingSwapToken());
+  }, [pendingFromToken, selectedTokenTo, dispatch]);
 
   // Debounced live quote fetching from /api/exchange/quote
   useEffect(() => {

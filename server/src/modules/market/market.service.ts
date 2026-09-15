@@ -128,13 +128,18 @@ export class MarketService {
   async getTokenById(coinId: string): Promise<MarketToken | null> {
     const cleanId = coinId.trim().toLowerCase();
 
-    // 1. Fast lookup from cached master list
+    // 1. Fast lookup from cached master list (if contract addresses are already present)
     try {
       const master = await this.getMasterTokenList(false);
       const found = master.find(
         (t) => t.id.toLowerCase() === cleanId || t.symbol.toLowerCase() === cleanId
       );
-      if (found) return found;
+      if (
+        found &&
+        (found.contractAddress || (found.contractAddresses && found.contractAddresses.length > 0))
+      ) {
+        return found;
+      }
     } catch {
       // Continue to direct provider query
     }
@@ -159,11 +164,7 @@ export class MarketService {
     );
   }
 
-  /**
-   * Get Token Chart
-   * Strict token binding. Zero synthetic points generated.
-   * If upstream returns no points, returns empty points array.
-   */
+
   async getTokenChart(coinId: string, period: string = '1w'): Promise<ChartResponse> {
     const cleanId = coinId.trim().toLowerCase();
     const cleanPeriod = period.trim().toLowerCase();

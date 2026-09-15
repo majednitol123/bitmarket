@@ -10,6 +10,7 @@ import {
   StyleSheet,
   AppState,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { useTheme } from "styled-components/native";
 import { useSafeAreaInsets, EdgeInsets } from "react-native-safe-area-context";
@@ -51,8 +52,106 @@ import { GeneralStatus } from "../../store/types";
 import { MarketToken } from "../../api/marketApi";
 import { formatCompactNumber, formatPrice, formatPercent } from "../../utils/formatters";
 import { updateTokenPrices } from "../../utils/tokenPricing";
+import { resolveTokenForSwap } from "../../utils/tokenResolution";
+import { setPendingSwapFromToken } from "../../store/swapSlice";
 
 const CATEGORIES = ["All", "Top Gainers", "Layer 1", "DeFi", "Layer 2"];
+
+interface MarketTokenCardProps {
+  token: MarketToken;
+  theme: ThemeType;
+  styles: ReturnType<typeof createStyles>;
+  onPress: (token: MarketToken) => void;
+  onTrade: (token: MarketToken) => void;
+}
+
+const MarketTokenCard = React.memo<MarketTokenCardProps>(
+  function MarketTokenCard({ token, theme, styles, onPress, onTrade }) {
+    const isPositive = token.change24hPercent >= 0;
+
+    return (
+      <TouchableOpacity
+        style={styles.tokenCard}
+        activeOpacity={0.7}
+        onPress={() => onPress(token)}
+      >
+        {/* Asset Column with Rank Badge */}
+        <View style={styles.assetCol}>
+          <BlockchainIcon
+            symbol={token.symbol}
+            size={34}
+            logoUrl={token.logoUrl}
+          />
+          <View style={styles.assetInfo}>
+            <View style={styles.symbolRankRow}>
+              <Text style={styles.assetSymbol}>{token.symbol}</Text>
+              {token.rank && token.rank < 1000 ? (
+                <View style={styles.rankBadge}>
+                  <Text style={styles.rankBadgeText}>#{token.rank}</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.assetName} numberOfLines={1}>
+              {token.name}
+            </Text>
+          </View>
+        </View>
+
+        {/* Price & Change Column */}
+        <View style={styles.priceCol}>
+          <Text style={styles.priceText}>{formatPrice(token.priceUsd)}</Text>
+          <View
+            style={[
+              styles.changeBadge,
+              {
+                backgroundColor: isPositive
+                  ? "rgba(16, 185, 129, 0.15)"
+                  : "rgba(239, 68, 68, 0.15)",
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.changeText,
+                { color: isPositive ? "#10B981" : "#EF4444" },
+              ]}
+            >
+              {formatPercent(token.change24hPercent)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Trade Action Column */}
+        <TouchableOpacity
+          style={styles.tradeButton}
+          activeOpacity={0.8}
+          onPress={() => onTrade(token)}
+        >
+          <LinearGradient
+            colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.tradeGradient}
+          >
+            <SwapIcon size={12} color="#FFFFFF" strokeWidth={2.5} />
+            <Text style={styles.tradeButtonText}>Swap</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    );
+  },
+  (prev, next) =>
+    prev.token.id === next.token.id &&
+    prev.token.priceUsd === next.token.priceUsd &&
+    prev.token.change24hPercent === next.token.change24hPercent &&
+    prev.token.rank === next.token.rank &&
+    prev.token.name === next.token.name &&
+    prev.token.logoUrl === next.token.logoUrl &&
+    prev.theme === next.theme &&
+    prev.styles === next.styles &&
+    prev.onPress === next.onPress &&
+    prev.onTrade === next.onTrade
+);
 
 export default function MarketsScreen() {
   const theme = useTheme() as ThemeType;
@@ -165,7 +264,7 @@ export default function MarketsScreen() {
   }, [localSearchInput, searchResults, tokens]);
 
   // Route to Token Detail screen
-  const handleTokenPress = (token: MarketToken) => {
+  const handleTokenPress = useCallback((token: MarketToken) => {
     router.push({
       pathname: "/(app)/token-detail",
       params: {
@@ -177,12 +276,36 @@ export default function MarketsScreen() {
         change24h: String(token.change24hPercent),
       },
     });
-  };
+  }, []);
 
-  // Swap action
-  const handleTrade = (token: MarketToken) => {
+  // Swap action - resolves verified contract address and sets token on Exchange
+  const handleTrade = useCallback(async (token: MarketToken) => {
+    try {
+      const resolved = await resolveTokenForSwap({
+        symbol: token.symbol,
+        name: token.name,
+        coinId: token.id,
+        contractAddress: token.contractAddress,
+        contractAddresses: token.contractAddresses,
+        chainId: selectedChain.id,
+        logoUrl: token.logoUrl,
+      });
+
+      dispatch(
+        setPendingSwapFromToken({
+          symbol: resolved.token.symbol,
+          name: resolved.token.name,
+          address: resolved.token.address,
+          chainId: resolved.chain.id,
+          logoUrl: resolved.token.icon,
+          color: resolved.token.color,
+        })
+      );
+    } catch (e) {
+      console.warn("Failed to resolve token for swap:", e);
+    }
     router.replace("/(app)");
-  };
+  }, [dispatch, selectedChain.id]);
 
   const isMarketCapPositive = (overview?.marketCapChange24hPercent ?? 0) >= 0;
 
@@ -324,85 +447,27 @@ export default function MarketsScreen() {
     </View>
   );
 
-  // Render individual Token Card
-  const renderTokenCard = ({ item: token }: { item: MarketToken }) => {
-    const isPositive = token.change24hPercent >= 0;
+  // Memoized individual Token Card renderer using Pure/Memoized MarketTokenCard
+  const renderTokenCard = useCallback(
+    ({ item }: { item: MarketToken }) => (
+      <MarketTokenCard
+        token={item}
+        theme={theme}
+        styles={styles}
+        onPress={handleTokenPress}
+        onTrade={handleTrade}
+      />
+    ),
+    [theme, styles, handleTokenPress, handleTrade]
+  );
 
-    return (
-      <TouchableOpacity
-        key={token.id || token.symbol}
-        style={styles.tokenCard}
-        activeOpacity={0.7}
-        onPress={() => handleTokenPress(token)}
-      >
-        {/* Asset Column with Rank Badge */}
-        <View style={styles.assetCol}>
-          <BlockchainIcon
-            symbol={token.symbol}
-            size={34}
-            logoUrl={token.logoUrl}
-          />
-          <View style={styles.assetInfo}>
-            <View style={styles.symbolRankRow}>
-              <Text style={styles.assetSymbol}>{token.symbol}</Text>
-              {token.rank && token.rank < 1000 ? (
-                <View style={styles.rankBadge}>
-                  <Text style={styles.rankBadgeText}>#{token.rank}</Text>
-                </View>
-              ) : null}
-            </View>
-            <Text style={styles.assetName} numberOfLines={1}>
-              {token.name}
-            </Text>
-          </View>
-        </View>
-
-        {/* Price & Change Column */}
-        <View style={styles.priceCol}>
-          <Text style={styles.priceText}>{formatPrice(token.priceUsd)}</Text>
-          <View
-            style={[
-              styles.changeBadge,
-              {
-                backgroundColor: isPositive
-                  ? "rgba(16, 185, 129, 0.15)"
-                  : "rgba(239, 68, 68, 0.15)",
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.changeText,
-                { color: isPositive ? "#10B981" : "#EF4444" },
-              ]}
-            >
-              {formatPercent(token.change24hPercent)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Trade Action Column */}
-        <TouchableOpacity
-          style={styles.tradeButton}
-          activeOpacity={0.8}
-          onPress={() => handleTrade(token)}
-        >
-          <LinearGradient
-            colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.tradeGradient}
-          >
-            <SwapIcon size={12} color="#FFFFFF" strokeWidth={2.5} />
-            <Text style={styles.tradeButtonText}>Swap</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </TouchableOpacity>
-    );
-  };
+  const keyExtractor = useCallback(
+    (item: MarketToken) => item.id || item.symbol,
+    []
+  );
 
   // Render Footer with Load More Spinner or End of List Indicator
-  const renderListFooter = () => {
+  const renderListFooter = useCallback(() => {
     if (isLoadingMore) {
       return (
         <View style={styles.loadMoreContainer}>
@@ -425,10 +490,10 @@ export default function MarketsScreen() {
     }
 
     return null;
-  };
+  }, [isLoadingMore, hasMore, displayedTokens.length, localSearchInput, theme.colors.primary, styles]);
 
   // Render Empty state or initial Skeleton cards
-  const renderListEmpty = () => {
+  const renderListEmpty = useCallback(() => {
     if (tokensStatus === GeneralStatus.Loading || searchStatus === GeneralStatus.Loading) {
       return (
         <View style={styles.skeletonContainer}>
@@ -458,7 +523,7 @@ export default function MarketsScreen() {
         </Text>
       </View>
     );
-  };
+  }, [tokensStatus, searchStatus, theme.colors.grey, styles]);
 
   return (
     <SafeAreaContainer edges={["bottom", "left", "right"]}>
@@ -466,13 +531,18 @@ export default function MarketsScreen() {
 
       <FlatList
         data={displayedTokens}
-        keyExtractor={(item) => item.id || item.symbol}
+        keyExtractor={keyExtractor}
         renderItem={renderTokenCard}
         ListHeaderComponent={renderListHeader}
         ListFooterComponent={renderListFooter}
         ListEmptyComponent={renderListEmpty}
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.4}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={Platform.OS === "android"}
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: insets.bottom + 120 },

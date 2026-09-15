@@ -57,6 +57,9 @@ import {
   selectPortfolioSelectedTimeframe,
   selectPortfolioError,
 } from "../../store/portfolioSlice";
+import { resolveTokenForSwap } from "../../utils/tokenResolution";
+import { setPendingSwapFromToken } from "../../store/swapSlice";
+import { PortfolioHolding } from "../../api/portfolioApi";
 
 type TabType = "tokens" | "defi" | "activity";
 
@@ -140,7 +143,33 @@ export default function PortfolioScreen() {
     }
   }, [dispatch, activeAddress, selectedChainState.id, reduxTimeframe]);
 
-  const handleNavigateSwap = () => {
+  const handleNavigateSwap = async (holding?: PortfolioHolding | unknown) => {
+    if (holding && typeof holding === "object" && "symbol" in holding) {
+      const h = holding as PortfolioHolding;
+      try {
+        const resolved = await resolveTokenForSwap({
+          symbol: h.symbol,
+          name: h.name,
+          coinId: h.coinId,
+          contractAddress: h.contractAddress,
+          chainId: selectedChainState.id,
+          logoUrl: h.logoUrl,
+        });
+
+        dispatch(
+          setPendingSwapFromToken({
+            symbol: resolved.token.symbol,
+            name: resolved.token.name,
+            address: resolved.token.address,
+            chainId: resolved.chain.id,
+            logoUrl: resolved.token.icon,
+            color: resolved.token.color,
+          })
+        );
+      } catch (e) {
+        console.warn("Failed to resolve holding for swap:", e);
+      }
+    }
     router.replace("/(app)");
   };
 
@@ -511,7 +540,7 @@ export default function PortfolioScreen() {
 
                     <TouchableOpacity
                       style={styles.tokenSwapBtn}
-                      onPress={handleNavigateSwap}
+                      onPress={() => handleNavigateSwap(token)}
                       activeOpacity={0.8}
                     >
                       <LinearGradient

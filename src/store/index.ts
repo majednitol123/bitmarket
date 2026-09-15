@@ -24,6 +24,7 @@ import connectedUserReducer from "./connectedUserSlice";
 import marketReducer from "./marketSlice";
 import portfolioReducer from "./portfolioSlice";
 import alertReducer from "./alertSlice";
+import swapReducer from "./swapSlice";
 
 import { GeneralStatus } from "./types";
 
@@ -69,6 +70,7 @@ const rootReducer = combineReducers({
   market: marketReducer,
   portfolio: portfolioReducer,
   alerts: alertReducer,
+  swap: swapReducer,
 });
 
 const resettableRootReducer = (state: any, action: any) => {
