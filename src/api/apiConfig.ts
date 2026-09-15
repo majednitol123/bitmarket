@@ -6,8 +6,9 @@ import axios, { AxiosInstance } from 'axios';
 
 export const getApiBaseUrl = (): string => {
   // 1. Explicit environment variable
-  const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-  if (envUrl) {
+  const rawEnvUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (rawEnvUrl) {
+    const envUrl = rawEnvUrl.replace(/\/+$/, '');
     // Android emulator cannot reach host via "localhost", rewrite to 10.0.2.2
     if (Platform.OS === 'android' && !Device.isDevice && (envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {
       return envUrl.replace(/localhost|127\.0\.0\.1/, '10.0.2.2');
@@ -15,7 +16,7 @@ export const getApiBaseUrl = (): string => {
     return envUrl;
   }
 
-  // 2. Metro Bundler host IP (auto-detects the dev machine's LAN IP when connected via Expo Go/Dev Client)
+
   const hostUri =
     Constants.expoConfig?.hostUri ||
     (Constants as any).manifest2?.extra?.expoClient?.hostUri ||
