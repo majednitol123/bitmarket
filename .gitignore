@@ -16,6 +16,7 @@ node_modules/
 *.p12
 *.key
 *.mobileprovision
+*-firebase-adminsdk-*.json
 
 # Metro
 .metro-health-check*
