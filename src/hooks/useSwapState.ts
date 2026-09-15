@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Animated, Easing } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "../store";
@@ -9,6 +9,7 @@ import {
   setDeadline as setDeadlineAction,
   setExpertMode as setExpertModeAction,
 } from "../store/settingsSlice";
+import { fetchMarketTokens } from "../store/marketSlice";
 import {
   CHAINS,
   TOKENS_BY_CHAIN,
@@ -18,6 +19,7 @@ import {
 } from "../constants/tokenRegistry";
 import { notifyChainChanged, notifySwapReady } from "../services/notificationService";
 import { calculateToAmount } from "../utils/tokenPricing";
+import { exchangeApi, type ExchangeQuoteData, type RouteType } from "../api/exchangeApi";
 
 // ═══════════════════════════════════════════════════════════
 // SWAP SETTINGS
@@ -45,6 +47,11 @@ export function useSwapState() {
   const [selectedChainTo, setSelectedChainTo] = useState<Chain>(CHAINS[0]);
   const [selectedTokenFrom, setSelectedTokenFrom] = useState<Token | null>(defaultFrom);
   const [selectedTokenTo, setSelectedTokenTo] = useState<Token | null>(defaultTo);
+
+  // ─── Live Quote state ───
+  const [quoteData, setQuoteData] = useState<ExchangeQuoteData | null>(null);
+  const [isQuoting, setIsQuoting] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
 
   // ─── Review Modal state ───
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
@@ -96,11 +103,53 @@ export function useSwapState() {
     outputRange: ["0deg", "180deg"],
   });
 
+  // Fetch live market tokens on mount to populate live token prices
+  useEffect(() => {
+    dispatch(fetchMarketTokens({ page: 1, limit: 50, category: 'All' }));
+  }, [dispatch]);
+
+  // Debounced live quote fetching from /api/exchange/quote
+  useEffect(() => {
+    const num = parseFloat(fromAmount);
+    if (isNaN(num) || num <= 0 || !selectedTokenFrom || !selectedTokenTo) {
+      setQuoteData(null);
+      setIsQuoting(false);
+      return;
+    }
+
+    setIsQuoting(true);
+    const timer = setTimeout(async () => {
+      try {
+        const quote = await exchangeApi.getQuote({
+          fromChain: selectedChainFrom.id,
+          toChain: selectedChainTo.id,
+          fromToken: selectedTokenFrom.address || selectedTokenFrom.symbol,
+          toToken: selectedTokenTo.address || selectedTokenTo.symbol,
+          fromAmount,
+          slippage,
+        });
+        setQuoteData(quote);
+        setToAmount(quote.toAmount);
+        setQuoteError(null);
+      } catch (err: any) {
+        console.warn("[useSwapState] Quote fetch error:", err?.message);
+        setQuoteError(err?.message || "Failed to fetch live quote");
+        const fallback = calculateToAmount(fromAmount, selectedTokenFrom?.symbol, selectedTokenTo?.symbol);
+        if (fallback) setToAmount(fallback);
+      } finally {
+        setIsQuoting(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [fromAmount, selectedChainFrom.id, selectedChainTo.id, selectedTokenFrom, selectedTokenTo, slippage]);
+
   // ─── Handlers ───
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 500);
-  }, []);
+    await dispatch(fetchMarketTokens({ page: 1, limit: 50, category: 'All' }));
+    setRefreshing(false);
+  }, [dispatch]);
 
   const openChainModal = useCallback((target: "from" | "to") => {
     setChainModalTarget(target);
@@ -131,12 +180,17 @@ export function useSwapState() {
   const handleFromAmountChange = useCallback(
     (val: string) => {
       setFromAmount(val);
-      const calculated = calculateToAmount(
-        val,
-        selectedTokenFrom?.symbol,
-        selectedTokenTo?.symbol
-      );
-      setToAmount(calculated);
+      if (!val || parseFloat(val) <= 0) {
+        setToAmount("");
+        setQuoteData(null);
+      } else {
+        const immediate = calculateToAmount(
+          val,
+          selectedTokenFrom?.symbol,
+          selectedTokenTo?.symbol
+        );
+        if (immediate) setToAmount(immediate);
+      }
     },
     [selectedTokenFrom, selectedTokenTo]
   );
@@ -221,6 +275,7 @@ export function useSwapState() {
   });
 
   const displayChain = selectedChainFrom;
+  const routeType: RouteType = selectedChainFrom.id === selectedChainTo.id ? "swap" : "bridge";
 
   return {
     // Exchange
@@ -236,6 +291,12 @@ export function useSwapState() {
     selectedTokenTo,
     setSelectedTokenTo,
     displayChain,
+    routeType,
+
+    // Live Quote Data
+    quoteData,
+    isQuoting,
+    quoteError,
 
     // Modals
     chainModalVisible,

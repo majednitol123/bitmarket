@@ -56,6 +56,7 @@ export interface PaginatedTokens {
   meta: {
     page: number;
     limit: number;
+    total?: number;
     hasMore: boolean;
   };
 }

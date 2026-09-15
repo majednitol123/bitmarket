@@ -5,7 +5,8 @@ import { AppError } from '../../middleware/errorHandler';
 export class MarketController {
   async getOverview(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const overview = await marketService.getOverview();
+      const forceRefresh = req.query.refresh === 'true' || req.query.force === 'true';
+      const overview = await marketService.getOverview(forceRefresh);
       res.json({
         success: true,
         data: overview,
@@ -20,8 +21,9 @@ export class MarketController {
       const page = Math.max(1, parseInt(String(req.query.page || '1'), 10));
       const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '50'), 10)));
       const category = String(req.query.category || 'all');
+      const forceRefresh = req.query.refresh === 'true' || req.query.force === 'true';
 
-      const result = await marketService.getTokens(page, limit, category);
+      const result = await marketService.getTokens(page, limit, category, forceRefresh);
       res.json({
         success: true,
         data: result.tokens,

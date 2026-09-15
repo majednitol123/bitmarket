@@ -9,10 +9,12 @@ import {
   Animated,
   Easing,
   Platform,
+  Linking,
 } from "react-native";
 import { useTheme } from "styled-components/native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
+import { useDispatch } from "react-redux";
 import type { ThemeType } from "../../styles/theme";
 import type { Chain, Token } from "../../constants/tokenRegistry";
 import { BlockchainIcon } from "../BlockchainIcon/BlockchainIcon";
@@ -28,6 +30,10 @@ import {
 } from "../Icons/AppIcons";
 import { getTokenPrice, formatUsd } from "../../utils/tokenPricing";
 import { notifySwapExecuted } from "../../services/notificationService";
+import { useAccount, useProvider, useAppKit } from "@reown/appkit-react-native";
+import { exchangeApi, type ExchangeQuoteData, type RouteType } from "../../api/exchangeApi";
+import { getChainExplorerTxUrl } from "../../utils/chainMapping";
+import { refreshPortfolio } from "../../store/portfolioSlice";
 
 export interface SwapReviewModalProps {
   visible: boolean;
@@ -38,10 +44,13 @@ export interface SwapReviewModalProps {
   fromToken: Token | null;
   toToken: Token | null;
   chain: Chain;
+  toChain?: Chain;
   slippage: string;
+  quoteData?: ExchangeQuoteData | null;
+  routeType?: RouteType;
 }
 
-type ModalStage = "review" | "submitting" | "success";
+type ModalStage = "review" | "submitting" | "pending" | "success" | "connect_wallet";
 
 export const SwapReviewModal: React.FC<SwapReviewModalProps> = ({
   visible,
@@ -52,13 +61,22 @@ export const SwapReviewModal: React.FC<SwapReviewModalProps> = ({
   fromToken,
   toToken,
   chain,
+  toChain,
   slippage,
+  quoteData,
+  routeType = "swap",
 }) => {
   const theme = useTheme() as ThemeType;
+  const { isConnected, address } = useAccount();
+  const { provider } = useProvider();
+  const { open } = useAppKit();
+  const dispatch = useDispatch<any>();
+
   const [stage, setStage] = useState<ModalStage>("review");
   const [copied, setCopied] = useState(false);
   const [txHash, setTxHash] = useState("");
   const [submittingStep, setSubmittingStep] = useState(1);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Animations
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
@@ -73,9 +91,9 @@ export const SwapReviewModal: React.FC<SwapReviewModalProps> = ({
     }
   }, [visible]);
 
-  // Pulse animation during submitting
+  // Pulse animation during submitting and pending
   useEffect(() => {
-    if (stage === "submitting") {
+    if (stage === "submitting" || stage === "pending") {
       const loop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -117,36 +135,140 @@ export const SwapReviewModal: React.FC<SwapReviewModalProps> = ({
   const fromPrice = getTokenPrice(fromSymbol);
   const toPrice = getTokenPrice(toSymbol);
 
-  const fromUsdTotal = (Number(fromAmount) || 0) * fromPrice;
-  const toUsdTotal = (Number(toAmount) || 0) * toPrice;
+  const fromUsdTotal = fromPrice !== null ? (Number(fromAmount) || 0) * fromPrice : null;
+  const toUsdTotal = toPrice !== null ? (Number(toAmount) || 0) * toPrice : null;
 
-  const rateValue = toPrice > 0 ? (fromPrice / toPrice).toFixed(4) : "1.00";
+  const rateValue = (fromPrice !== null && toPrice !== null && toPrice > 0)
+    ? (fromPrice / toPrice).toFixed(4)
+    : "--";
   const slippagePercent = parseFloat(slippage) || 0.5;
-  const minReceived = ((Number(toAmount) || 0) * (1 - slippagePercent / 100)).toFixed(
-    toPrice >= 1 ? 2 : 4
-  );
+  const minReceived = toAmount
+    ? ((Number(toAmount) || 0) * (1 - slippagePercent / 100)).toFixed(
+        toPrice && toPrice >= 1 ? 2 : 4
+      )
+    : "--";
 
-  const handleConfirmSwap = () => {
-    setStage("submitting");
-    setSubmittingStep(1);
+  // Real-time on-chain confirmation polling
+  useEffect(() => {
+    if (stage !== "pending" || !txHash) return;
 
-    // Step 1: Routing & Approving
-    setTimeout(() => {
-      setSubmittingStep(2);
-    }, 1200);
+    let isMounted = true;
+    let attempts = 0;
+    const maxAttempts = 40;
 
-    // Step 2: DEX Execution & Confirmation
-    setTimeout(() => {
-      const generatedHash = `0x${Array.from({ length: 64 }, () =>
-        Math.floor(Math.random() * 16).toString(16)
-      ).join("")}`;
-      setTxHash(generatedHash);
-      setStage("success");
+    const pollTimer = setInterval(async () => {
+      if (!isMounted) return;
+      attempts++;
 
-      // Notify system
-      notifySwapExecuted(fromSymbol, toSymbol, fromAmount, toAmount);
-      onSwapSuccess?.(generatedHash);
-    }, 2800);
+      try {
+        const statusData = await exchangeApi.getStatus(txHash, true);
+        if (!isMounted) return;
+
+        if (statusData?.status === "confirmed" || statusData?.status === "completed") {
+          clearInterval(pollTimer);
+          setStage("success");
+          onSwapSuccess?.(txHash);
+          notifySwapExecuted(fromSymbol, toSymbol, fromAmount, txHash);
+          if (address) {
+            dispatch(refreshPortfolio({ chain: chain.id, address }));
+          }
+        } else if (statusData?.status === "failed") {
+          clearInterval(pollTimer);
+          setErrorMessage(statusData.errorMessage || "Transaction reverted on-chain");
+          setStage("review");
+        }
+      } catch (err: any) {
+        console.warn("[SwapReviewModal] Status poll error:", err?.message);
+      }
+
+      if (attempts >= maxAttempts) {
+        clearInterval(pollTimer);
+      }
+    }, 2500);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollTimer);
+    };
+  }, [stage, txHash, fromSymbol, toSymbol, fromAmount, chain.id, address, dispatch, onSwapSuccess]);
+
+  const handleConfirmSwap = async () => {
+    try {
+      setErrorMessage(null);
+
+      if (!isConnected || !address || !provider) {
+        setStage("connect_wallet");
+        return;
+      }
+
+      setStage("submitting");
+      setSubmittingStep(1);
+
+      const buildData = await exchangeApi.buildTransaction({
+        fromChain: chain.id,
+        toChain: toChain?.id || chain.id,
+        fromToken: fromToken?.address || fromToken?.symbol || "native",
+        toToken: toToken?.address || toToken?.symbol || "native",
+        fromAmount,
+        fromAddress: address,
+        slippage,
+      });
+
+      // If token approval is required
+      if (buildData.approval?.needed) {
+        setSubmittingStep(2);
+        try {
+          await (provider as any).request({
+            method: "eth_sendTransaction",
+            params: [{
+              from: address,
+              to: buildData.approval.tokenAddress,
+              data: `0x095ea7b3000000000000000000000000${buildData.approval.spender?.replace(/^0x/, "").padStart(64, "0")}${buildData.approval.amount ? BigInt(buildData.approval.amount).toString(16).padStart(64, "0") : "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}`,
+            }],
+          });
+        } catch (approvalErr: any) {
+          console.warn("[SwapReviewModal] Token approval warning:", approvalErr?.message);
+        }
+      }
+
+      setSubmittingStep(3);
+
+      const tx = buildData.transaction;
+      const rawTxHash = await (provider as any).request({
+        method: "eth_sendTransaction",
+        params: [{
+          from: address,
+          to: tx.to,
+          data: tx.data,
+          value: tx.value,
+        }],
+      });
+
+      const realTxHash = String(rawTxHash);
+      setTxHash(realTxHash);
+      setStage("pending");
+
+      const idempotencyKey = `swap_${Date.now()}_${realTxHash.slice(2, 10)}`;
+      await exchangeApi.confirmSwap({
+        swapId: buildData.swapId,
+        txHash: realTxHash,
+        walletAddress: address,
+        chain: chain.name,
+        chainId: Number(chain.id) || 1,
+        fromTokenAddress: fromToken?.address,
+        fromTokenSymbol: fromSymbol,
+        toTokenAddress: toToken?.address,
+        toTokenSymbol: toSymbol,
+        fromAmount,
+        toAmount,
+        router: buildData.provider,
+        idempotencyKey,
+      });
+    } catch (err: any) {
+      console.warn("[SwapReviewModal] Swap execution error:", err?.message);
+      setErrorMessage(err?.message || "Transaction cancelled or failed");
+      setStage("review");
+    }
   };
 
   const handleCopyHash = async () => {
@@ -157,9 +279,16 @@ export const SwapReviewModal: React.FC<SwapReviewModalProps> = ({
     }
   };
 
+  const handleOpenExplorer = () => {
+    if (txHash) {
+      const url = getChainExplorerTxUrl(chain.id, txHash);
+      Linking.openURL(url).catch((err) => console.warn("Could not open explorer URL:", err));
+    }
+  };
+
   const shortHash = txHash
     ? `${txHash.slice(0, 8)}...${txHash.slice(-6)}`
-    : "0x7f9a...3b21";
+    : "--";
 
   return (
     <Modal
@@ -272,20 +401,22 @@ export const SwapReviewModal: React.FC<SwapReviewModalProps> = ({
                   <View style={styles.inlineRow}>
                     <LightningIcon size={12} color="#10B981" strokeWidth={2.5} />
                     <Text style={[styles.detailHighlight, { color: "#10B981" }]}>
-                      Uniswap v3 & 1inch Split
+                      {quoteData?.provider || (routeType === "bridge" ? "Cross-Chain Bridge" : "Uniswap v3 & 1inch Split")}
                     </Text>
                   </View>
                 </View>
 
                 <View style={styles.detailRow}>
                   <Text style={[styles.detailLabel, { color: theme.colors.lightGrey }]}>Price Impact</Text>
-                  <Text style={[styles.detailValue, { color: "#10B981" }]}>{"< 0.01% (Optimal)"}</Text>
+                  <Text style={[styles.detailValue, { color: "#10B981" }]}>
+                    {quoteData?.priceImpactPercent ? `< ${quoteData.priceImpactPercent}%` : "< 0.01% (Optimal)"}
+                  </Text>
                 </View>
 
                 <View style={styles.detailRow}>
                   <Text style={[styles.detailLabel, { color: theme.colors.lightGrey }]}>Min. Received ({slippage}%)</Text>
                   <Text style={[styles.detailValue, { color: theme.colors.white }]}>
-                    {minReceived} {toSymbol}
+                    {quoteData?.minReceived || minReceived} {toSymbol}
                   </Text>
                 </View>
 
@@ -297,12 +428,18 @@ export const SwapReviewModal: React.FC<SwapReviewModalProps> = ({
                     </Text>
                   </View>
                   <Text style={[styles.detailValue, { color: theme.colors.white }]}>
-                    ~$1.40 (14 Gwei)
+                    {quoteData?.estimatedGasUsd ? `~$${quoteData.estimatedGasUsd.toFixed(2)}` : "~$1.40"}
                   </Text>
                 </View>
               </View>
 
-              {/* Confirm Swap Button */}
+              {errorMessage && (
+                <Text style={{ color: "#EF4444", textAlign: "center", marginBottom: 12, fontSize: 13 }}>
+                  {errorMessage}
+                </Text>
+              )}
+
+              {/* Confirm Swap / Bridge Button */}
               <TouchableOpacity
                 activeOpacity={0.85}
                 onPress={handleConfirmSwap}
@@ -315,7 +452,9 @@ export const SwapReviewModal: React.FC<SwapReviewModalProps> = ({
                   style={styles.actionGradient}
                 >
                   <SwapIcon size={18} color="#FFFFFF" strokeWidth={2.5} />
-                  <Text style={styles.actionButtonText}>Confirm Swap</Text>
+                  <Text style={styles.actionButtonText}>
+                    {routeType === "bridge" ? "Confirm Bridge" : "Confirm Swap"}
+                  </Text>
                 </LinearGradient>
               </TouchableOpacity>
             </>
@@ -403,6 +542,18 @@ export const SwapReviewModal: React.FC<SwapReviewModalProps> = ({
                     {copied && <Text style={styles.copiedText}>Copied!</Text>}
                   </TouchableOpacity>
                 </View>
+
+                <View style={styles.txRow}>
+                  <Text style={[styles.txLabel, { color: theme.colors.lightGrey }]}>Explorer</Text>
+                  <TouchableOpacity
+                    onPress={handleOpenExplorer}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: "600" }}>
+                      View on {chain.name} Explorer ↗
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* Close Button */}
@@ -418,6 +569,123 @@ export const SwapReviewModal: React.FC<SwapReviewModalProps> = ({
                   style={styles.actionGradient}
                 >
                   <Text style={styles.actionButtonText}>Done</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ════════════ STAGE 4: PENDING ON-CHAIN VERIFICATION ════════════ */}
+          {stage === "pending" && (
+            <View style={styles.successContainer}>
+              <Animated.View style={[styles.pulsingGlow, { transform: [{ scale: pulseAnim }] }]}>
+                <LinearGradient
+                  colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
+                  style={styles.pulsingCircle}
+                >
+                  <ActivityIndicator size="large" color="#FFFFFF" />
+                </LinearGradient>
+              </Animated.View>
+
+              <Text style={[styles.successTitle, { color: theme.colors.white }]}>
+                Verifying On-Chain...
+              </Text>
+              <Text style={[styles.successSub, { color: theme.colors.lightGrey, textAlign: "center" }]}>
+                Transaction broadcasted to {chain.name}. Waiting for block confirmation.
+              </Text>
+
+              <View style={[styles.txHashCard, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
+                <View style={styles.txRow}>
+                  <Text style={[styles.txLabel, { color: theme.colors.lightGrey }]}>Status</Text>
+                  <View style={styles.badgePending}>
+                    <Text style={styles.badgePendingText}>Pending Block Inclusion</Text>
+                  </View>
+                </View>
+
+                <View style={styles.txRow}>
+                  <Text style={[styles.txLabel, { color: theme.colors.lightGrey }]}>Network</Text>
+                  <Text style={[styles.txValue, { color: theme.colors.white }]}>{chain.name}</Text>
+                </View>
+
+                <View style={styles.txRow}>
+                  <Text style={[styles.txLabel, { color: theme.colors.lightGrey }]}>Swapping</Text>
+                  <Text style={[styles.txValue, { color: theme.colors.white }]}>
+                    {fromAmount} {fromSymbol} ➔ {toAmount} {toSymbol}
+                  </Text>
+                </View>
+
+                <View style={styles.txRow}>
+                  <Text style={[styles.txLabel, { color: theme.colors.lightGrey }]}>Transaction Hash</Text>
+                  <TouchableOpacity
+                    style={styles.copyRow}
+                    onPress={handleCopyHash}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.hashText, { color: theme.colors.primary }]}>
+                      {shortHash}
+                    </Text>
+                    <CopyIcon size={13} color={copied ? "#10B981" : theme.colors.lightGrey} />
+                    {copied && <Text style={styles.copiedText}>Copied!</Text>}
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.txRow}>
+                  <Text style={[styles.txLabel, { color: theme.colors.lightGrey }]}>Explorer</Text>
+                  <TouchableOpacity
+                    onPress={handleOpenExplorer}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: "600" }}>
+                      View on {chain.name} Explorer ↗
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={onClose}
+                style={styles.actionButtonWrapper}
+              >
+                <View style={[styles.actionGradient, { backgroundColor: theme.colors.border }]}>
+                  <Text style={[styles.actionButtonText, { color: theme.colors.white }]}>
+                    Close & Track in Activity
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ════════════ STAGE 5: CONNECT WALLET REQUIRED ════════════ */}
+          {stage === "connect_wallet" && (
+            <View style={styles.successContainer}>
+              <View style={styles.checkCircleWrapper}>
+                <View style={[styles.checkCircleGlow, { backgroundColor: "rgba(124, 58, 237, 0.15)" }]}>
+                  <ShieldCheckIcon size={40} color={theme.colors.primary} strokeWidth={2.2} />
+                </View>
+              </View>
+
+              <Text style={[styles.successTitle, { color: theme.colors.white }]}>
+                Connect Wallet Required
+              </Text>
+              <Text style={[styles.successSub, { color: theme.colors.lightGrey, textAlign: "center", lineHeight: 20 }]}>
+                An active Web3 wallet connection is required to sign and broadcast real DEX transactions on {chain.name}.
+              </Text>
+
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => {
+                  onClose();
+                  open();
+                }}
+                style={styles.actionButtonWrapper}
+              >
+                <LinearGradient
+                  colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.actionGradient}
+                >
+                  <Text style={styles.actionButtonText}>Connect Wallet</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
@@ -672,6 +940,17 @@ const styles = StyleSheet.create({
   },
   badgeSuccessText: {
     color: "#10B981",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  badgePending: {
+    backgroundColor: "rgba(245, 158, 11, 0.2)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  badgePendingText: {
+    color: "#F59E0B",
     fontSize: 11,
     fontWeight: "700",
   },

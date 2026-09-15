@@ -56,7 +56,7 @@ export interface PaginatedTokensResponse {
   };
 }
 
-import { getApiBaseUrl } from './apiConfig';
+import { getApiBaseUrl, attachRequestTracing } from './apiConfig';
 
 const marketApiClient = axios.create({
   baseURL: getApiBaseUrl(),
@@ -66,19 +66,34 @@ const marketApiClient = axios.create({
   },
 });
 
+attachRequestTracing(marketApiClient);
+
+marketApiClient.interceptors.request.use((reqConfig) => {
+  reqConfig.baseURL = getApiBaseUrl();
+  return reqConfig;
+});
+
 export const marketApi = {
-  async getOverview(): Promise<MarketOverview> {
-    const res = await marketApiClient.get('/api/market/overview');
+  async getOverview(forceRefresh?: boolean): Promise<MarketOverview> {
+    const res = await marketApiClient.get('/api/market/overview', {
+      params: forceRefresh ? { refresh: 'true' } : undefined,
+    });
     return res.data.data;
   },
 
   async getTokens(
     page: number = 1,
     limit: number = 50,
-    category: string = 'all'
+    category: string = 'all',
+    forceRefresh?: boolean
   ): Promise<PaginatedTokensResponse> {
     const res = await marketApiClient.get('/api/market/tokens', {
-      params: { page, limit, category },
+      params: {
+        page,
+        limit,
+        category,
+        ...(forceRefresh ? { refresh: 'true' } : {}),
+      },
     });
     return {
       tokens: res.data.data,

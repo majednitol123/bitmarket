@@ -1,5 +1,6 @@
-import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Animated } from "react-native";
+import { useSelector } from "react-redux";
 import { useTheme } from "styled-components/native";
 import { ThemeType } from "../../styles/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -8,6 +9,7 @@ import { useNavigation, router } from "expo-router";
 import { MenuIcon, ChevronDownIcon, ChevronLeftIcon, PortfolioIcon } from "../Icons/AppIcons";
 import { ROUTES } from "../../constants/routes";
 import { useAppKit, useAccount } from "@reown/appkit-react-native";
+import { selectRealtimeConnected } from "../../store/marketSlice";
 
 export interface HeaderProps {
   title?: string;
@@ -33,6 +35,32 @@ const Header: React.FC<HeaderProps> = ({
   const navigation = useNavigation();
   const { open } = useAppKit();
   const { isConnected, address } = useAccount();
+  const isRealtimeConnected = useSelector(selectRealtimeConnected);
+
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (isRealtimeConnected) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 0.35,
+            duration: 900,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 900,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    } else {
+      pulseAnim.setValue(0.5);
+    }
+  }, [isRealtimeConnected, pulseAnim]);
 
   const formatAddress = (addr?: string) => {
     if (!addr) return "";
@@ -121,6 +149,30 @@ const Header: React.FC<HeaderProps> = ({
               </Text>
             </View>
           )}
+
+          {/* Real-time Live Status Badge */}
+          <View
+            style={[
+              styles.liveStatusPill,
+              isRealtimeConnected ? styles.liveStatusPillOnline : styles.liveStatusPillOffline,
+            ]}
+          >
+            <Animated.View
+              style={[
+                styles.liveDot,
+                isRealtimeConnected ? styles.liveDotOnline : styles.liveDotOffline,
+                { opacity: pulseAnim },
+              ]}
+            />
+            <Text
+              style={[
+                styles.liveStatusText,
+                isRealtimeConnected ? styles.liveStatusTextOnline : styles.liveStatusTextOffline,
+              ]}
+            >
+              {isRealtimeConnected ? "LIVE" : "SYNC"}
+            </Text>
+          </View>
         </View>
 
         {/* Right Action */}
@@ -278,6 +330,45 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "700",
+  },
+  liveStatusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4.5,
+  },
+  liveStatusPillOnline: {
+    backgroundColor: "rgba(16, 185, 129, 0.12)",
+    borderColor: "rgba(16, 185, 129, 0.35)",
+  },
+  liveStatusPillOffline: {
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+    borderColor: "rgba(245, 158, 11, 0.35)",
+  },
+  liveDot: {
+    width: 5.5,
+    height: 5.5,
+    borderRadius: 3,
+  },
+  liveDotOnline: {
+    backgroundColor: "#10B981",
+  },
+  liveDotOffline: {
+    backgroundColor: "#F59E0B",
+  },
+  liveStatusText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  liveStatusTextOnline: {
+    color: "#34D399",
+  },
+  liveStatusTextOffline: {
+    color: "#FBBF24",
   },
 });
 

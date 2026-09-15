@@ -12,17 +12,28 @@ export async function runMigrations(): Promise<void> {
   if (!pool) return;
 
   try {
-    const migrationFile = path.join(__dirname, 'migrations/001_create_portfolio_tables.sql');
-    if (!fs.existsSync(migrationFile)) {
-      console.warn(`[Migrations] Migration file not found: ${migrationFile}`);
+    let migrationsDir = path.join(__dirname, 'migrations');
+    if (!fs.existsSync(migrationsDir)) {
+      migrationsDir = path.join(__dirname, '../../src/db/migrations');
+    }
+    if (!fs.existsSync(migrationsDir)) {
+      console.warn(`[Migrations] Migrations directory not found: ${migrationsDir}`);
       return;
     }
 
-    const sql = fs.readFileSync(migrationFile, 'utf-8');
+    const files = fs
+      .readdirSync(migrationsDir)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
+
     const client = await pool.connect();
     try {
-      await client.query(sql);
-      console.log('[Migrations] Portfolio tables migration executed successfully.');
+      for (const file of files) {
+        const filePath = path.join(migrationsDir, file);
+        const sql = fs.readFileSync(filePath, 'utf-8');
+        await client.query(sql);
+        console.log(`[Migrations] Executed migration: ${file}`);
+      }
     } finally {
       client.release();
     }

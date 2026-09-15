@@ -8,6 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Linking,
+  AppState,
 } from "react-native";
 import { useTheme } from "styled-components/native";
 import { useSafeAreaInsets, EdgeInsets } from "react-native-safe-area-context";
@@ -116,18 +117,18 @@ export default function PortfolioScreen() {
     }
   }, [dispatch, activeAddress, selectedChainState.id, reduxTimeframe]);
 
-  // Real-time live background polling: updates balance & transactions silently every 30s
+  // App foreground active refresh: updates portfolio using cache-first freshness on resume
   useEffect(() => {
     if (!activeAddress) return;
 
-    const pollTimer = setInterval(() => {
-      dispatch(refreshPortfolio({ chain: selectedChainState.id, address: activeAddress }));
-      dispatch(fetchPortfolioChart({ chain: selectedChainState.id, address: activeAddress, range: reduxTimeframe }));
-      dispatch(fetchPortfolioTransactions({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
-      dispatch(fetchSwapHistory({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
-    }, 30000);
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        dispatch(fetchPortfolio({ chain: selectedChainState.id, address: activeAddress }));
+        dispatch(fetchPortfolioChart({ chain: selectedChainState.id, address: activeAddress, range: reduxTimeframe }));
+      }
+    });
 
-    return () => clearInterval(pollTimer);
+    return () => subscription.remove();
   }, [dispatch, activeAddress, selectedChainState.id, reduxTimeframe]);
 
   const onRefresh = useCallback(async () => {
@@ -476,7 +477,9 @@ export default function PortfolioScreen() {
                         adjustsFontSizeToFit
                         minimumFontScale={0.75}
                       >
-                        ${token.valueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {token.valueUsd !== null && token.valueUsd !== undefined
+                          ? `$${token.valueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : '—'}
                       </Text>
                       <Text
                         numberOfLines={1}
@@ -485,8 +488,9 @@ export default function PortfolioScreen() {
                           { color: isPositive ? theme.colors.success : theme.colors.error },
                         ]}
                       >
-                        ${token.priceUsd < 0.01 ? token.priceUsd.toPrecision(3) : token.priceUsd.toFixed(2)} ({isPositive ? "+" : ""}
-                        {token.change24hPercent.toFixed(2)}%)
+                        {token.priceUsd > 0
+                          ? `$${token.priceUsd < 0.01 ? token.priceUsd.toPrecision(3) : token.priceUsd.toFixed(2)} (${isPositive ? "+" : ""}${token.change24hPercent.toFixed(2)}%)`
+                          : '—'}
                       </Text>
                     </View>
 

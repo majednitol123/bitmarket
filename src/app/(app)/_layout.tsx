@@ -17,6 +17,7 @@ import { ROUTES } from "../../constants/routes";
 import { Alert, View } from "react-native";
 import { AppKit } from "@reown/appkit-react-native";
 import FloatingTabBar from "../../components/FloatingTabBar/FloatingTabBar";
+import { useRealtimeSubscription } from "../../hooks/useRealtimeSubscription";
 
 export const LinearGradientBackground = styled(LinearGradient)<{
   theme: ThemeType;
@@ -27,6 +28,9 @@ export const LinearGradientBackground = styled(LinearGradient)<{
 export default function AppLayout() {
   const theme = useTheme();
   const [appReady, setAppReady] = useState<boolean>(false);
+
+  // Maintain continuous real-time WebSocket connection across tabs
+  useRealtimeSubscription();
 
   useEffect(() => {
     const prepare = async () => {

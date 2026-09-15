@@ -33,7 +33,8 @@ import Header from "../../components/Header/Header";
 import { BlockchainIcon } from "../../components/BlockchainIcon/BlockchainIcon";
 import { marketApi, MarketToken, ChartPoint } from "../../api/marketApi";
 import { formatCompactNumber, formatPrice, formatPercent } from "../../utils/formatters";
-import { SwapIcon, CopyIcon } from "../../components/Icons/AppIcons";
+import { SwapIcon, CopyIcon, BellIcon } from "../../components/Icons/AppIcons";
+import { PriceAlertModal } from "../../components/PriceAlertModal";
 
 const TIMEFRAMES = ["1D", "1W", "1M", "3M", "1Y", "ALL"] as const;
 type Timeframe = typeof TIMEFRAMES[number];
@@ -102,6 +103,7 @@ export default function TokenDetailScreen() {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [chartWidth, setChartWidth] = useState<number>(340);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [isAlertModalOpen, setIsAlertModalOpen] = useState<boolean>(false);
 
   const chartHeight = 200;
   const paddingX = 12;
@@ -296,6 +298,15 @@ export default function TokenDetailScreen() {
                 <Text style={styles.rankBadgeText}>#{tokenDetail.rank}</Text>
               </View>
             ) : null}
+
+            <TouchableOpacity
+              style={styles.headerAlertBtn}
+              activeOpacity={0.75}
+              onPress={() => setIsAlertModalOpen(true)}
+            >
+              <BellIcon size={14} color="#38BDF8" />
+              <Text style={styles.headerAlertBtnText}>Alert</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Price & Change */}
@@ -530,25 +541,56 @@ export default function TokenDetailScreen() {
           ) : null}
         </View>
 
-        {/* ═══ Bottom Swap Action ═══ */}
-        <TouchableOpacity
-          style={styles.swapButton}
-          activeOpacity={0.85}
-          onPress={handleTrade}
-        >
-          <LinearGradient
-            colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.swapButtonGradient}
+        {/* ═══ Bottom Actions (Price Alert & Swap) ═══ */}
+        <View style={styles.bottomActionBar}>
+          <TouchableOpacity
+            style={styles.bottomAlertButton}
+            activeOpacity={0.8}
+            onPress={() => setIsAlertModalOpen(true)}
           >
-            <SwapIcon size={18} color="#FFFFFF" strokeWidth={2.5} />
-            <Text style={styles.swapButtonText}>
-              Swap {tokenDetail?.symbol || initialSymbol}
-            </Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            <BellIcon size={18} color="#38BDF8" />
+            <Text style={styles.bottomAlertButtonText}>Set Alert</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.swapButton}
+            activeOpacity={0.85}
+            onPress={handleTrade}
+          >
+            <LinearGradient
+              colors={theme.colors.buttonGradient || (["#7C3AED", "#A855F7"] as const)}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.swapButtonGradient}
+            >
+              <SwapIcon size={18} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={styles.swapButtonText}>
+                Swap {tokenDetail?.symbol || initialSymbol}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
+
+      {/* ═══ Price Alert Modal ═══ */}
+      <PriceAlertModal
+        visible={isAlertModalOpen}
+        onClose={() => setIsAlertModalOpen(false)}
+        tokenId={coinId}
+        tokenSymbol={tokenDetail?.symbol || initialSymbol}
+        tokenName={tokenDetail?.name || initialName}
+        currentPrice={
+          tokenDetail?.priceUsd ||
+          (params.price ? parseFloat(params.price.replace(/[^0-9.]/g, "")) : 0)
+        }
+        onAlertCreated={(alert) => {
+          Toast.show({
+            type: "success",
+            text1: "Price Alert Active",
+            text2: `Target ${alert.condition === "above" ? "≥" : "≤"} $${alert.targetPrice.toLocaleString()} set for ${alert.tokenSymbol}`,
+          });
+        }}
+      />
     </SafeAreaContainer>
   );
 }
@@ -725,10 +767,50 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       fontFamily: "monospace",
       marginTop: 2,
     },
+    headerAlertBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: "rgba(56, 189, 248, 0.1)",
+      borderWidth: 1,
+      borderColor: "rgba(56, 189, 248, 0.25)",
+      borderRadius: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      marginLeft: 8,
+    },
+    headerAlertBtnText: {
+      color: "#38BDF8",
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    bottomActionBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginTop: 8,
+    },
+    bottomAlertButton: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: "rgba(56, 189, 248, 0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(56, 189, 248, 0.3)",
+      borderRadius: 16,
+      paddingVertical: 16,
+    },
+    bottomAlertButtonText: {
+      color: "#38BDF8",
+      fontSize: 15,
+      fontWeight: "700",
+    },
     swapButton: {
+      flex: 1.5,
       borderRadius: 16,
       overflow: "hidden",
-      marginTop: 8,
     },
     swapButtonGradient: {
       flexDirection: "row",

@@ -2,16 +2,19 @@ import styled, { useTheme } from "styled-components/native";
 import { AppDispatch, RootState } from "../../store";
 import { ThemeType } from "../../styles/theme";
 import { SafeAreaContainer } from "../../components/Styles/Layout.styles";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { authenticateBiometric, saveBiometricPreference, checkBiometricAvailability } from "../../store/biometricsSlice";
-import { Switch, Alert, View, TextInput, TouchableOpacity, Text, StyleSheet, Clipboard } from "react-native";
+import { Switch, Alert, View, TextInput, TouchableOpacity, Text, StyleSheet, Clipboard, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradientBackground } from "../../components/Styles/Gradient";
 import { setThemeMode, ThemeMode, setNotificationsEnabled, setDebugOverrideAddress } from "../../store/settingsSlice";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as Notifications from "expo-notifications";
-import { notifyNotificationsToggled } from "../../services/notificationService";
+import { notifyNotificationsToggled, getOrCreateDeviceIdAsync } from "../../services/notificationService";
+import { notificationApi } from "../../api/notificationApi";
+import { alertApi, PriceAlert } from "../../api/alertApi";
+import { useAccount } from "@reown/appkit-react-native";
 import {
   BellIcon,
   ShieldCheckIcon,
@@ -22,6 +25,9 @@ import {
   DollarIcon,
   HelpCircleIcon,
   InfoIcon,
+  TrashIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
 } from "../../components/Icons/AppIcons";
 import Header from "../../components/Header/Header";
 
@@ -222,6 +228,83 @@ const SettingsIndex = () => {
       }
     } else {
       dispatch(setNotificationsEnabled(false));
+    }
+  };
+
+  const { address } = useAccount();
+  const [registeredDeviceId, setRegisteredDeviceId] = useState<string>("");
+  const [isTestingPush, setIsTestingPush] = useState<boolean>(false);
+  const [testPushStatus, setTestPushStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    getOrCreateDeviceIdAsync().then(setRegisteredDeviceId);
+  }, []);
+
+  // ─── Price Alerts State & Handlers ───
+  const [alerts, setAlerts] = useState<PriceAlert[]>([]);
+  const [loadingAlerts, setLoadingAlerts] = useState<boolean>(false);
+  const [actionAlertId, setActionAlertId] = useState<number | null>(null);
+
+  const activeWallet = address || "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
+
+  const fetchAlerts = useCallback(async () => {
+    setLoadingAlerts(true);
+    try {
+      const list = await alertApi.getAlerts(activeWallet);
+      setAlerts(list);
+    } catch (err) {
+      console.warn("[Settings] Error loading alerts:", err);
+    } finally {
+      setLoadingAlerts(false);
+    }
+  }, [activeWallet]);
+
+  useEffect(() => {
+    fetchAlerts();
+  }, [fetchAlerts]);
+
+  const handleRearmAlert = async (id: number) => {
+    setActionAlertId(id);
+    try {
+      await alertApi.rearmAlert(id, activeWallet);
+      await fetchAlerts();
+      Alert.alert("Alert Armed", "Price alert re-armed and actively monitoring.");
+    } catch (err: any) {
+      Alert.alert("Error", "Could not re-arm alert");
+    } finally {
+      setActionAlertId(null);
+    }
+  };
+
+  const handleDeleteAlert = async (id: number) => {
+    setActionAlertId(id);
+    try {
+      await alertApi.deleteAlert(id, activeWallet);
+      await fetchAlerts();
+    } catch (err: any) {
+      Alert.alert("Error", "Could not delete alert");
+    } finally {
+      setActionAlertId(null);
+    }
+  };
+
+  const handleSendTestPush = async () => {
+    setIsTestingPush(true);
+    setTestPushStatus(null);
+    try {
+      const targetAddress = address || "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
+      const res = await notificationApi.sendTestNotification({
+        walletAddress: targetAddress,
+        title: "🔔 BitMarket Push Alert",
+        body: "Test notification dispatched through backend worker delivery engine!",
+      });
+      setTestPushStatus(`Queued (${res.deliveriesEnqueued} delivery)`);
+      setTimeout(() => setTestPushStatus(null), 4000);
+    } catch (err: any) {
+      setTestPushStatus("Failed to queue");
+      setTimeout(() => setTestPushStatus(null), 4000);
+    } finally {
+      setIsTestingPush(false);
     }
   };
 
@@ -489,7 +572,338 @@ const SettingsIndex = () => {
                     trackColor={{ false: theme.colors.grey, true: theme.colors.primaryLight }}
                   />
                 </OptionRow>
+
+                {notificationsEnabled && (
+                  <>
+                    <CardDivider />
+                    <View style={{ marginTop: 2, gap: 10 }}>
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#10B981" }} />
+                          <Text style={{ color: theme.colors.white, fontSize: 12, fontWeight: "600" }}>
+                            Push Delivery Engine
+                          </Text>
+                        </View>
+                        <View style={{
+                          backgroundColor: "rgba(16, 185, 129, 0.15)",
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
+                          borderRadius: 6,
+                        }}>
+                          <Text style={{ color: "#10B981", fontSize: 10, fontWeight: "700" }}>
+                            Active
+                          </Text>
+                        </View>
+                      </View>
+
+                      {registeredDeviceId ? (
+                        <Text style={{ color: theme.colors.lightGrey, fontSize: 11, fontFamily: "monospace" }}>
+                          Device ID: {registeredDeviceId.slice(0, 8)}...{registeredDeviceId.slice(-4)}
+                        </Text>
+                      ) : null}
+
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={handleSendTestPush}
+                        disabled={isTestingPush}
+                        style={{
+                          backgroundColor: "rgba(124, 58, 237, 0.15)",
+                          borderWidth: 1,
+                          borderColor: "rgba(124, 58, 237, 0.35)",
+                          borderRadius: 10,
+                          paddingVertical: 9,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          marginTop: 4,
+                        }}
+                      >
+                        <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: "700" }}>
+                          {isTestingPush
+                            ? "Routing via Worker..."
+                            : testPushStatus
+                            ? testPushStatus
+                            : "⚡ Send Test Push Alert"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
               </SettingOptionCard>
+            </SettingsGroup>
+
+            {/* Price Alerts Group */}
+            <SettingsGroup>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 10,
+                  marginHorizontal: 4,
+                }}
+              >
+                <GroupTitle style={{ marginBottom: 0, marginLeft: 0 }}>
+                  Price Alerts ({alerts.length})
+                </GroupTitle>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={fetchAlerts}
+                  style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    borderRadius: 6,
+                    backgroundColor: "rgba(255, 255, 255, 0.06)",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: theme.colors.lightGrey,
+                      fontSize: 11,
+                      fontWeight: "600",
+                    }}
+                  >
+                    {loadingAlerts ? "Refreshing..." : "Refresh"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {alerts.length === 0 ? (
+                <SettingOptionCard activeOpacity={1}>
+                  <View
+                    style={{
+                      alignItems: "center",
+                      justifyContent: "center",
+                      paddingVertical: 12,
+                    }}
+                  >
+                    <BellIcon size={24} color="#64748B" />
+                    <Text
+                      style={{
+                        color: theme.colors.white,
+                        fontSize: 14,
+                        fontWeight: "700",
+                        marginTop: 8,
+                      }}
+                    >
+                      No Active Price Alerts
+                    </Text>
+                    <Text
+                      style={{
+                        color: theme.colors.lightGrey,
+                        fontSize: 12,
+                        textAlign: "center",
+                        marginTop: 4,
+                        paddingHorizontal: 16,
+                        lineHeight: 17,
+                      }}
+                    >
+                      Open any token in the Markets tab and tap "Set Alert" to monitor price rises and drops.
+                    </Text>
+                  </View>
+                </SettingOptionCard>
+              ) : (
+                alerts.map((alert) => {
+                  const isArmed = alert.enabled && !alert.triggeredAt;
+                  const isCooldown = alert.enabled && alert.triggeredAt !== null;
+                  const isTriggeredOnce = !alert.enabled && alert.triggeredAt !== null;
+
+                  return (
+                    <SettingOptionCard
+                      key={alert.id}
+                      activeOpacity={1}
+                      style={{ marginBottom: 8 }}
+                    >
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 10,
+                            flex: 1,
+                          }}
+                        >
+                          <View
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 10,
+                              backgroundColor:
+                                alert.condition === "above"
+                                  ? "rgba(16, 185, 129, 0.12)"
+                                  : "rgba(244, 63, 94, 0.12)",
+                              borderWidth: 1,
+                              borderColor:
+                                alert.condition === "above"
+                                  ? "rgba(16, 185, 129, 0.25)"
+                                  : "rgba(244, 63, 94, 0.25)",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            {alert.condition === "above" ? (
+                              <ArrowUpIcon size={16} color="#10B981" />
+                            ) : (
+                              <ArrowDownIcon size={16} color="#F43F5E" />
+                            )}
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 6,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: theme.colors.white,
+                                  fontSize: 15,
+                                  fontWeight: "700",
+                                }}
+                              >
+                                {alert.tokenSymbol}
+                              </Text>
+                              <Text
+                                style={{
+                                  fontSize: 13,
+                                  fontWeight: "700",
+                                  color:
+                                    alert.condition === "above"
+                                      ? "#10B981"
+                                      : "#F43F5E",
+                                }}
+                              >
+                                {alert.condition === "above" ? "≥" : "≤"} $
+                                {alert.targetPrice >= 1
+                                  ? alert.targetPrice.toLocaleString("en-US", {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })
+                                  : alert.targetPrice.toFixed(6)}
+                              </Text>
+                            </View>
+                            <Text
+                              style={{
+                                color: theme.colors.lightGrey,
+                                fontSize: 11,
+                                marginTop: 2,
+                              }}
+                            >
+                              {alert.cooldownMinutes > 0
+                                ? `${alert.cooldownMinutes / 60}h cooldown`
+                                : "One-shot"}{" "}
+                              • Triggered {alert.triggerCount}x
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Status & Action Buttons */}
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 8,
+                          }}
+                        >
+                          {isTriggeredOnce && (
+                            <TouchableOpacity
+                              style={{
+                                backgroundColor: "rgba(56, 189, 248, 0.15)",
+                                borderWidth: 1,
+                                borderColor: "rgba(56, 189, 248, 0.3)",
+                                paddingHorizontal: 10,
+                                paddingVertical: 5,
+                                borderRadius: 8,
+                              }}
+                              activeOpacity={0.7}
+                              onPress={() => handleRearmAlert(alert.id)}
+                              disabled={actionAlertId === alert.id}
+                            >
+                              {actionAlertId === alert.id ? (
+                                <ActivityIndicator size="small" color="#38BDF8" />
+                              ) : (
+                                <Text
+                                  style={{
+                                    color: "#38BDF8",
+                                    fontSize: 11,
+                                    fontWeight: "700",
+                                  }}
+                                >
+                                  Re-arm
+                                </Text>
+                              )}
+                            </TouchableOpacity>
+                          )}
+
+                          {isCooldown && (
+                            <View
+                              style={{
+                                backgroundColor: "rgba(245, 158, 11, 0.15)",
+                                paddingHorizontal: 8,
+                                paddingVertical: 4,
+                                borderRadius: 6,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: "#F59E0B",
+                                  fontSize: 10,
+                                  fontWeight: "700",
+                                }}
+                              >
+                                Cooldown
+                              </Text>
+                            </View>
+                          )}
+
+                          {isArmed && (
+                            <View
+                              style={{
+                                backgroundColor: "rgba(16, 185, 129, 0.15)",
+                                paddingHorizontal: 8,
+                                paddingVertical: 4,
+                                borderRadius: 6,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: "#10B981",
+                                  fontSize: 10,
+                                  fontWeight: "700",
+                                }}
+                              >
+                                Active
+                              </Text>
+                            </View>
+                          )}
+
+                          <TouchableOpacity
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 8,
+                              backgroundColor: "rgba(239, 68, 68, 0.1)",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                            activeOpacity={0.7}
+                            onPress={() => handleDeleteAlert(alert.id)}
+                            disabled={actionAlertId === alert.id}
+                          >
+                            <TrashIcon size={14} color="#EF4444" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </SettingOptionCard>
+                  );
+                })
+              )}
             </SettingsGroup>
 
             {/* Security Group */}

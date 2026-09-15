@@ -31,7 +31,7 @@ import {
   GasIcon,
 } from "../../components/Icons/AppIcons";
 
-import { getTokenPrice } from "../../utils/tokenPricing";
+import { getExchangeRate, calculateToAmount } from "../../utils/tokenPricing";
 
 // ═══════════════════════════════════════════════════════════
 // MAIN SCREEN
@@ -216,7 +216,7 @@ export default function Index() {
           {/* ─── To Field ─── */}
           <View style={styles.fieldHeaderRow}>
             <Text style={styles.fieldLabel}>You Receive</Text>
-            <Text style={styles.estLabel}>Estimated</Text>
+            <Text style={styles.estLabel}>{swap.isQuoting ? "Quoting..." : "Estimated"}</Text>
           </View>
 
           <LinearGradient
@@ -271,13 +271,15 @@ export default function Index() {
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Rate</Text>
               <Text style={styles.summaryValue}>
-                1 {fromSymbol} ≈{" "}
-                {(
-                  getTokenPrice(fromSymbol) / (getTokenPrice(toSymbol) || 1)
-                ).toLocaleString("en-US", {
-                  maximumFractionDigits: 4,
-                })}{" "}
-                {toSymbol}
+                {(() => {
+                  if (swap.isQuoting) return "Fetching live rate...";
+                  if (swap.quoteData?.exchangeRate) {
+                    return `1 ${fromSymbol} ≈ ${swap.quoteData.exchangeRate.toLocaleString("en-US", { maximumFractionDigits: 4 })} ${toSymbol}`;
+                  }
+                  const rate = getExchangeRate(fromSymbol, toSymbol);
+                  if (rate === null) return "Rate unavailable";
+                  return `1 ${fromSymbol} ≈ ${rate.toLocaleString("en-US", { maximumFractionDigits: 4 })} ${toSymbol}`;
+                })()}
               </Text>
             </View>
 
@@ -286,7 +288,7 @@ export default function Index() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
                 <LightningIcon size={12} color="#10B981" strokeWidth={2.5} />
                 <Text style={styles.summaryHighlight}>
-                  Uniswap v3 & 1inch Split
+                  {swap.quoteData?.provider || (swap.routeType === "bridge" ? "Multi-Chain Bridge" : "Uniswap v3 & 1inch Split")}
                 </Text>
               </View>
             </View>
@@ -304,7 +306,9 @@ export default function Index() {
               </TouchableOpacity>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <GasIcon size={12} color={theme.colors.grey} strokeWidth={2} />
-                <Text style={styles.gasEstimate}>Est. ~$1.40</Text>
+                <Text style={styles.gasEstimate}>
+                  {swap.quoteData?.estimatedGasUsd ? `Est. ~$${swap.quoteData.estimatedGasUsd.toFixed(2)}` : "Est. ~$1.40"}
+                </Text>
               </View>
             </View>
           </View>
@@ -322,7 +326,7 @@ export default function Index() {
               style={styles.connectGradient}
             >
               <Text style={styles.connectButtonText}>
-                {isConnected ? "Review Swap" : "Connect Wallet"}
+                {isConnected ? (swap.routeType === "bridge" ? "Review Bridge" : "Review Swap") : "Connect Wallet"}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -332,18 +336,20 @@ export default function Index() {
         <SwapReviewModal
           visible={swap.reviewModalVisible}
           onClose={() => swap.setReviewModalVisible(false)}
-          fromAmount={swap.fromAmount || "1.0"}
+          fromAmount={swap.fromAmount || ""}
           toAmount={
             swap.toAmount ||
-            (
-              (Number(swap.fromAmount) || 1.0) *
-              (getTokenPrice(fromSymbol) / (getTokenPrice(toSymbol) || 1))
-            ).toFixed(2)
+            (swap.fromAmount
+              ? calculateToAmount(swap.fromAmount, fromSymbol, toSymbol)
+              : "")
           }
           fromToken={swap.selectedTokenFrom}
           toToken={swap.selectedTokenTo}
-          chain={swap.displayChain}
+          chain={swap.selectedChainFrom}
+          toChain={swap.selectedChainTo}
           slippage={swap.slippage}
+          quoteData={swap.quoteData}
+          routeType={swap.routeType}
         />
 
         <SwapSettingsBottomSheet

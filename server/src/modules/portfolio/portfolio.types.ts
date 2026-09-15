@@ -9,7 +9,7 @@ export interface PortfolioHolding {
   decimals: number;
   contractAddress?: string;
   priceUsd: number;
-  valueUsd: number;
+  valueUsd: number | null;
   change24hPercent: number;
   logoUrl: string;
   allocationPercent: number;
@@ -95,6 +95,7 @@ export interface SwapTransactionRecord {
   id?: number;
   walletId?: number;
   chain: string;
+  chainId?: number;
   txHash: string;
   fromTokenAddress?: string;
   fromTokenSymbol?: string;
@@ -103,8 +104,14 @@ export interface SwapTransactionRecord {
   toTokenSymbol?: string;
   toAmount?: string;
   router?: string;
-  status: 'pending' | 'completed' | 'failed';
+  status: 'pending' | 'confirmed' | 'completed' | 'failed';
   gasUsed?: string;
+  blockNumber?: number;
+  errorMessage?: string;
+  lastCheckedAt?: string;
+  checkAttempts?: number;
+  idempotencyKey?: string;
   createdAt?: string;
   confirmedAt?: string;
+  updatedAt?: string;
 }

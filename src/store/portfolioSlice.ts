@@ -10,6 +10,7 @@ import {
   NormalizedPortfolioResponse,
 } from '../api/portfolioApi';
 import { getCoinStatsBlockchain } from '../utils/chainMapping';
+import { updateTokenPrices } from '../utils/tokenPricing';
 
 export interface PortfolioState {
   summary: PortfolioSummary | null;
@@ -70,12 +71,12 @@ const initialState: PortfolioState = {
 
 export const fetchPortfolio = createAsyncThunk<
   NormalizedPortfolioResponse,
-  { chain: string; address: string },
+  { chain: string; address: string; forceRefresh?: boolean },
   { rejectValue: string }
->('portfolio/fetchPortfolio', async ({ chain, address }, { rejectWithValue }) => {
+>('portfolio/fetchPortfolio', async ({ chain, address, forceRefresh }, { rejectWithValue }) => {
   try {
     const blockchain = getCoinStatsBlockchain(chain);
-    return await portfolioApi.getPortfolio(blockchain, address);
+    return await portfolioApi.getPortfolio(blockchain, address, forceRefresh);
   } catch (err: any) {
     const msg = err.response?.data?.error?.message || err.message || 'Failed to fetch portfolio';
     return rejectWithValue(msg);
@@ -188,6 +189,9 @@ export const portfolioSlice = createSlice({
         state.holdings = action.payload.holdings;
         state.defi = action.payload.defi || [];
         state.walletAddress = action.payload.wallet.address;
+        if (action.payload.holdings && Array.isArray(action.payload.holdings)) {
+          updateTokenPrices(action.payload.holdings);
+        }
       })
       .addCase(fetchPortfolio.rejected, (state, action) => {
         state.status = 'failed';
@@ -269,6 +273,9 @@ export const portfolioSlice = createSlice({
         state.status = 'succeeded';
         if (action.payload.wallet?.address) {
           state.walletAddress = action.payload.wallet.address;
+        }
+        if (action.payload.holdings && Array.isArray(action.payload.holdings)) {
+          updateTokenPrices(action.payload.holdings);
         }
       })
       .addCase(refreshPortfolio.rejected, (state) => {

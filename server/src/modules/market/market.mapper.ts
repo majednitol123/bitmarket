@@ -5,14 +5,23 @@ import {
   ChartResponse,
 } from './market.types';
 
+function parseNumber(val: any, fallback: number = 0): number {
+  if (typeof val === 'number' && !isNaN(val)) return val;
+  if (typeof val === 'string' && val.trim() !== '') {
+    const num = parseFloat(val);
+    if (!isNaN(num)) return num;
+  }
+  return fallback;
+}
+
 export function mapCoinStatsOverview(raw: any): MarketOverview {
   return {
-    marketCapUsd: typeof raw?.marketCap === 'number' ? raw.marketCap : 0,
-    volume24hUsd: typeof raw?.volume === 'number' ? raw.volume : 0,
-    btcDominancePercent: typeof raw?.btcDominance === 'number' ? raw.btcDominance : 0,
-    marketCapChange24hPercent: typeof raw?.marketCapChange === 'number' ? raw.marketCapChange : 0,
-    volumeChange24hPercent: typeof raw?.volumeChange === 'number' ? raw.volumeChange : 0,
-    btcDominanceChangePercent: typeof raw?.btcDominanceChange === 'number' ? raw.btcDominanceChange : 0,
+    marketCapUsd: parseNumber(raw?.marketCap, 0),
+    volume24hUsd: parseNumber(raw?.volume, 0),
+    btcDominancePercent: parseNumber(raw?.btcDominance, 0),
+    marketCapChange24hPercent: parseNumber(raw?.marketCapChange, 0),
+    volumeChange24hPercent: parseNumber(raw?.volumeChange, 0),
+    btcDominanceChangePercent: parseNumber(raw?.btcDominanceChange, 0),
     updatedAt: new Date().toISOString(),
   };
 }
@@ -51,13 +60,13 @@ export function mapCoinStatsCoin(raw: any): MarketToken | null {
     symbol: String(raw.symbol).toUpperCase(),
     name: String(raw.name),
     logoUrl: raw.icon || '',
-    priceUsd: typeof raw.price === 'number' ? raw.price : 0,
-    change24hPercent: typeof raw.priceChange1d === 'number' ? raw.priceChange1d : 0,
-    change1hPercent: typeof raw.priceChange1h === 'number' ? raw.priceChange1h : 0,
-    change1wPercent: typeof raw.priceChange1w === 'number' ? raw.priceChange1w : 0,
-    marketCapUsd: typeof raw.marketCap === 'number' ? raw.marketCap : 0,
-    volume24hUsd: typeof raw.volume === 'number' ? raw.volume : 0,
-    rank: typeof raw.rank === 'number' ? raw.rank : 9999,
+    priceUsd: parseNumber(raw.price, 0),
+    change24hPercent: parseNumber(raw.priceChange1d, 0),
+    change1hPercent: parseNumber(raw.priceChange1h, 0),
+    change1wPercent: parseNumber(raw.priceChange1w, 0),
+    marketCapUsd: parseNumber(raw.marketCap, 0),
+    volume24hUsd: parseNumber(raw.volume, 0),
+    rank: parseNumber(raw.rank, 9999),
     contractAddress,
     contractAddresses,
     priceUpdatedAt: new Date().toISOString(),

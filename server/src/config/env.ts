@@ -5,7 +5,11 @@ import path from 'path';
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 export const config = {
+  env: process.env.NODE_ENV || 'development',
+  isProduction: process.env.NODE_ENV === 'production',
   port: parseInt(process.env.PORT || '4000', 10),
+  host: process.env.HOST || '0.0.0.0',
+  corsOrigin: process.env.CORS_ORIGIN || '*',
   coinstats: {
     apiKey: process.env.COINSTATS_API_KEY || '',
     apiKeys: (process.env.COINSTATS_API_KEYS || process.env.COINSTATS_API_KEY || '')
@@ -33,4 +37,18 @@ export const config = {
     transactions: parseInt(process.env.CACHE_TTL_TRANSACTIONS || '60', 10),
     defi: parseInt(process.env.CACHE_TTL_DEFI || '120', 10),
   },
+  rateLimit: {
+    globalMax: parseInt(process.env.RATE_LIMIT_GLOBAL_MAX || '120', 10),
+    refreshMax: parseInt(process.env.RATE_LIMIT_REFRESH_MAX || '15', 10),
+    mutationMax: parseInt(process.env.RATE_LIMIT_MUTATION_MAX || '30', 10),
+  },
 };
+
+/**
+ * Mask secret string for safe logging
+ */
+export function maskSecret(secret?: string): string {
+  if (!secret) return '(empty)';
+  if (secret.length <= 8) return '****';
+  return `${secret.slice(0, 4)}...${secret.slice(-4)}`;
+}

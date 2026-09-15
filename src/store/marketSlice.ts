@@ -7,6 +7,7 @@ import {
   PaginatedTokensResponse,
 } from '../api/marketApi';
 import { GeneralStatus } from './types';
+import { updateTokenPrices } from '../utils/tokenPricing';
 
 export interface MarketState {
   overview: MarketOverview | null;
@@ -25,6 +26,8 @@ export interface MarketState {
   refreshing: boolean;
   lastUpdated: number | null;
   error: string | null;
+  realtimeConnected: boolean;
+  snapshotVersion: number;
 }
 
 const initialState: MarketState = {
@@ -44,14 +47,19 @@ const initialState: MarketState = {
   refreshing: false,
   lastUpdated: null,
   error: null,
+  realtimeConnected: false,
+  snapshotVersion: 0,
 };
 
 // Async Thunks
-export const fetchMarketOverview = createAsyncThunk(
+export const fetchMarketOverview = createAsyncThunk<
+  MarketOverview,
+  { forceRefresh?: boolean } | undefined
+>(
   'market/fetchOverview',
-  async (_, { rejectWithValue }) => {
+  async (args, { rejectWithValue }) => {
     try {
-      const data = await marketApi.getOverview();
+      const data = await marketApi.getOverview(args?.forceRefresh);
       return data;
     } catch (err: any) {
       return rejectWithValue(err.message || 'Failed to fetch market overview');
@@ -61,7 +69,7 @@ export const fetchMarketOverview = createAsyncThunk(
 
 export const fetchMarketTokens = createAsyncThunk<
   { response: PaginatedTokensResponse; append: boolean; page: number },
-  { page?: number; limit?: number; category?: string; append?: boolean } | undefined
+  { page?: number; limit?: number; category?: string; append?: boolean; forceRefresh?: boolean } | undefined
 >(
   'market/fetchTokens',
   async (args, { getState, rejectWithValue }) => {
@@ -71,8 +79,9 @@ export const fetchMarketTokens = createAsyncThunk<
       const page = args?.page || 1;
       const limit = args?.limit || 50;
       const append = !!args?.append;
+      const forceRefresh = !!args?.forceRefresh;
 
-      const response = await marketApi.getTokens(page, limit, category);
+      const response = await marketApi.getTokens(page, limit, category, forceRefresh);
       return { response, append, page };
     } catch (err: any) {
       return rejectWithValue(err.message || 'Failed to fetch market tokens');
@@ -115,8 +124,8 @@ export const refreshMarketData = createAsyncThunk(
     const category = state.market?.selectedCategory || 'All';
 
     await Promise.allSettled([
-      dispatch(fetchMarketOverview()),
-      dispatch(fetchMarketTokens({ page: 1, limit: 50, category, append: false })),
+      dispatch(fetchMarketOverview({ forceRefresh: true })),
+      dispatch(fetchMarketTokens({ page: 1, limit: 50, category, append: false, forceRefresh: true })),
     ]);
   }
 );
@@ -146,6 +155,12 @@ export const marketSlice = createSlice({
     clearSelectedChart: (state) => {
       state.selectedChart = null;
       state.chartStatus = GeneralStatus.Idle;
+    },
+    setRealtimeConnected: (state, action: PayloadAction<boolean>) => {
+      state.realtimeConnected = action.payload;
+    },
+    setSnapshotVersion: (state, action: PayloadAction<number>) => {
+      state.snapshotVersion = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -191,6 +206,9 @@ export const marketSlice = createSlice({
         state.currentPage = page;
         state.hasMore = response.meta.hasMore;
         state.lastUpdated = Date.now();
+        if (response?.tokens && Array.isArray(response.tokens)) {
+          updateTokenPrices(response.tokens);
+        }
       })
       .addCase(fetchMarketTokens.rejected, (state, action) => {
         state.tokensStatus = GeneralStatus.Failed;
@@ -245,6 +263,8 @@ export const {
   setSearchQuery,
   clearSearchResults,
   clearSelectedChart,
+  setRealtimeConnected,
+  setSnapshotVersion,
 } = marketSlice.actions;
 
 // Selectors
@@ -262,5 +282,7 @@ export const selectIsRefreshing = (state: { market: MarketState }) => state.mark
 export const selectHasMoreTokens = (state: { market: MarketState }) => state.market.hasMore;
 export const selectIsLoadingMore = (state: { market: MarketState }) => state.market.isLoadingMore;
 export const selectCurrentPage = (state: { market: MarketState }) => state.market.currentPage;
+export const selectRealtimeConnected = (state: { market: MarketState }) => state.market.realtimeConnected;
+export const selectSnapshotVersion = (state: { market: MarketState }) => state.market.snapshotVersion;
 
 export default marketSlice.reducer;

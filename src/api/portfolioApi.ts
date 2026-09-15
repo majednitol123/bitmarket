@@ -12,7 +12,7 @@ export interface PortfolioHolding {
   decimals: number;
   contractAddress?: string;
   priceUsd: number;
-  valueUsd: number;
+  valueUsd: number | null;
   change24hPercent: number;
   logoUrl: string;
   allocationPercent: number;
@@ -103,7 +103,7 @@ export interface NormalizedPortfolioResponse {
   updatedAt: string;
 }
 
-import { getApiBaseUrl } from './apiConfig';
+import { getApiBaseUrl, attachRequestTracing } from './apiConfig';
 
 const portfolioApiClient = axios.create({
   baseURL: getApiBaseUrl(),
@@ -113,19 +113,32 @@ const portfolioApiClient = axios.create({
   },
 });
 
+attachRequestTracing(portfolioApiClient);
+
+portfolioApiClient.interceptors.request.use((reqConfig) => {
+  reqConfig.baseURL = getApiBaseUrl();
+  return reqConfig;
+});
+
 export const portfolioApi = {
-  async getPortfolio(chain: string, address: string): Promise<NormalizedPortfolioResponse> {
-    const res = await portfolioApiClient.get(`/api/portfolio/${encodeURIComponent(chain)}/${encodeURIComponent(address)}`);
+  async getPortfolio(chain: string, address: string, forceRefresh?: boolean): Promise<NormalizedPortfolioResponse> {
+    const res = await portfolioApiClient.get(`/api/portfolio/${encodeURIComponent(chain)}/${encodeURIComponent(address)}`, {
+      params: forceRefresh ? { refresh: 'true' } : undefined,
+    });
     return res.data.data;
   },
 
-  async getSummary(chain: string, address: string): Promise<PortfolioSummary> {
-    const res = await portfolioApiClient.get(`/api/portfolio/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/summary`);
+  async getSummary(chain: string, address: string, forceRefresh?: boolean): Promise<PortfolioSummary> {
+    const res = await portfolioApiClient.get(`/api/portfolio/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/summary`, {
+      params: forceRefresh ? { refresh: 'true' } : undefined,
+    });
     return res.data.data;
   },
 
-  async getHoldings(chain: string, address: string): Promise<PortfolioHolding[]> {
-    const res = await portfolioApiClient.get(`/api/portfolio/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/holdings`);
+  async getHoldings(chain: string, address: string, forceRefresh?: boolean): Promise<PortfolioHolding[]> {
+    const res = await portfolioApiClient.get(`/api/portfolio/${encodeURIComponent(chain)}/${encodeURIComponent(address)}/holdings`, {
+      params: forceRefresh ? { refresh: 'true' } : undefined,
+    });
     return res.data.data;
   },
 

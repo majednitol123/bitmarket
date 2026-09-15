@@ -1,4 +1,10 @@
 import axios, { AxiosInstance } from 'axios';
+import { BaseProvider } from './core/BaseProvider';
+import {
+  ProviderAuthError,
+  ProviderRateLimitError,
+  ProviderError,
+} from './core/ProviderErrors';
 import { MarketDataProvider } from './MarketDataProvider';
 import { PortfolioDataProvider } from './PortfolioDataProvider';
 import {
@@ -15,111 +21,123 @@ import {
   mapCoinStatsChart,
 } from '../modules/market/market.mapper';
 import { config } from '../config/env';
-import { AppError } from '../middleware/errorHandler';
 
-export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvider {
+export class CoinStatsProvider extends BaseProvider implements MarketDataProvider, PortfolioDataProvider {
   private clients: AxiosInstance[];
   private activeKeyIndex: number = 0;
+  private apiKeys: string[];
 
   constructor() {
-    const keys = config.coinstats.apiKeys.length > 0
-      ? config.coinstats.apiKeys
-      : config.coinstats.apiKey
-        ? [config.coinstats.apiKey]
-        : [];
+    super('CoinStats', {
+      defaultTimeoutMs: config.coinstats.timeoutMs || 10000,
+      maxConsecutiveFailures: 5,
+      circuitBreakerCooldownMs: 30000,
+    });
 
-    if (keys.length === 0) {
+    this.apiKeys =
+      config.coinstats.apiKeys.length > 0
+        ? config.coinstats.apiKeys
+        : config.coinstats.apiKey
+          ? [config.coinstats.apiKey]
+          : [];
+
+    if (this.apiKeys.length === 0) {
       console.warn('[CoinStatsProvider] No API keys configured!');
+    } else {
+      console.log(`[CoinStatsProvider] Initialized with ${this.apiKeys.length} API key(s)`);
     }
 
-    console.log(`[CoinStatsProvider] Initialized with ${keys.length} API key(s)`);
-
-    // Create one axios client per API key
-    this.clients = keys.map((key, idx) => {
-      const client = axios.create({
+    // Create axios clients without blind 1500ms sleep interceptors
+    this.clients = this.apiKeys.map((key) => {
+      return axios.create({
         baseURL: config.coinstats.baseUrl,
         timeout: config.coinstats.timeoutMs,
         headers: {
-          'Accept': 'application/json',
+          Accept: 'application/json',
           'X-API-KEY': key,
         },
       });
-
-      // Auto-retry once on 429 with 1500ms delay for transient rate limits (same key)
-      client.interceptors.response.use(
-        (response) => response,
-        async (error) => {
-          const reqConfig = error.config;
-          if (error.response?.status === 429 && reqConfig && !reqConfig._retry) {
-            reqConfig._retry = true;
-            await new Promise((resolve) => setTimeout(resolve, 1500));
-            return client(reqConfig);
-          }
-          return Promise.reject(error);
-        }
-      );
-
-      return client;
     });
-  }
 
-  /** Get the currently active client */
-  private get client(): AxiosInstance {
-    if (this.clients.length === 0) {
-      throw new AppError('No CoinStats API keys configured', 500, 'NO_API_KEYS');
+    if (this.apiKeys.length > 0) {
+      this.budgetTracker.recordKeyRotation('CoinStats', 0, this.apiKeys.length, 'key_1');
     }
-    return this.clients[this.activeKeyIndex % this.clients.length];
   }
 
   /**
-   * Execute a request with automatic key rotation on rate-limit (429/406).
-   * Tries each key once before giving up.
+   * Execute request with immediate key rotation upon receiving 429/406 quota exhaustion.
+   * Never sleep-retries the exhausted key.
    */
-  private async requestWithRotation<T>(fn: (client: AxiosInstance) => Promise<T>): Promise<T> {
+  private async requestWithRotation<T>(
+    operationName: string,
+    fn: (client: AxiosInstance) => Promise<T>
+  ): Promise<T> {
     const totalKeys = this.clients.length;
     if (totalKeys === 0) {
-      throw new AppError('No CoinStats API keys configured', 500, 'NO_API_KEYS');
+      throw new ProviderAuthError('CoinStats', 'No CoinStats API keys configured');
     }
 
     let lastError: any = null;
     for (let attempt = 0; attempt < totalKeys; attempt++) {
       const keyIdx = (this.activeKeyIndex + attempt) % totalKeys;
+      const client = this.clients[keyIdx];
+      const keyIdentifier = `key_${keyIdx + 1}`;
+
       try {
-        const result = await fn(this.clients[keyIdx]);
-        // If a different key worked, make it the new default
+        const result = await this.executeWithResilience(
+          `${operationName}:${keyIdentifier}`,
+          async () => {
+            return await fn(client);
+          },
+          {
+            timeoutMs: config.coinstats.timeoutMs || 10000,
+            retries: 1, // Only 1 network retry before trying next key or propagating
+            isRetryable: (err) => {
+              // 429 / 406 triggers immediate key rotation, abort retry on this key
+              if (err.statusCode === 429 || err.statusCode === 406) {
+                return false;
+              }
+              return err.isRetryable;
+            },
+          }
+        );
+
+        this.budgetTracker.recordKeyUsage('CoinStats', keyIdentifier, true);
+
+        // If rotated successfully to a healthy key, set it as the primary index
         if (keyIdx !== this.activeKeyIndex) {
-          console.log(`[CoinStatsProvider] Rotated to API key #${keyIdx + 1}`);
+          console.log(`[CoinStatsProvider] Switched primary key to #${keyIdx + 1}`);
           this.activeKeyIndex = keyIdx;
+          this.budgetTracker.recordKeyRotation('CoinStats', this.activeKeyIndex, totalKeys, keyIdentifier);
         }
+
         return result;
       } catch (err: any) {
-        const status = err.response?.status;
+        this.budgetTracker.recordKeyUsage('CoinStats', keyIdentifier, false);
+        const status = err.statusCode || err.response?.status;
         if (status === 429 || status === 406) {
-          console.warn(`[CoinStatsProvider] Key #${keyIdx + 1} rate-limited (${status}), trying next...`);
+          console.warn(
+            `[CoinStatsProvider] Key #${keyIdx + 1} quota/rate-limit hit (${status}). Instantly rotating to next key...`
+          );
           lastError = err;
-          continue;
+          continue; // Instantly move to next key without sleeping
         }
-        // Non-rate-limit error — don't rotate, just throw
+        // Non-rate-limit error (e.g. 404, CircuitBreakerOpen, 500)
         throw err;
       }
     }
 
-    // All keys exhausted
-    console.error(`[CoinStatsProvider] All ${totalKeys} API keys exhausted (rate-limited)`);
-    throw lastError;
+    console.error(`[CoinStatsProvider] All ${totalKeys} API keys exhausted`);
+    throw new ProviderRateLimitError('CoinStats', undefined, lastError);
   }
 
   async getMarketOverview(): Promise<MarketOverview> {
     try {
-      const response = await this.requestWithRotation(c => c.get('/markets'));
+      const response = await this.requestWithRotation('getMarketOverview', (c) => c.get('/markets'));
       return mapCoinStatsOverview(response.data);
     } catch (err: any) {
-      console.error('[CoinStatsProvider] Error fetching market overview:', err.message);
-      throw new AppError(
-        `Failed to fetch market overview from provider: ${err.message}`,
-        err.response?.status || 502,
-        'PROVIDER_OVERVIEW_ERROR'
-      );
+      if (err instanceof ProviderError) throw err;
+      throw new ProviderError('CoinStats', `Failed to fetch market overview: ${err.message}`, 502, 'OVERVIEW_ERROR', false, err);
     }
   }
 
@@ -137,10 +155,9 @@ export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvi
     }
 
     try {
-      const response = await this.requestWithRotation(c => c.get('/coins', { params }));
+      const response = await this.requestWithRotation('getCoins', (c) => c.get('/coins', { params }));
       const rawResult = response.data?.result || response.data?.coins || response.data || [];
       const tokens = mapCoinStatsCoinList(Array.isArray(rawResult) ? rawResult : []);
-
       const hasMore = response.data?.meta?.hasNextPage ?? (tokens.length >= limit);
 
       return {
@@ -152,12 +169,8 @@ export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvi
         },
       };
     } catch (err: any) {
-      console.error('[CoinStatsProvider] Error fetching coins list:', err.message);
-      throw new AppError(
-        `Failed to fetch coins list from provider: ${err.message}`,
-        err.response?.status || 502,
-        'PROVIDER_COINS_ERROR'
-      );
+      if (err instanceof ProviderError) throw err;
+      throw new ProviderError('CoinStats', `Failed to fetch coins list: ${err.message}`, 502, 'COINS_ERROR', false, err);
     }
   }
 
@@ -165,31 +178,27 @@ export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvi
     if (!coinId) return null;
 
     try {
-      const response = await this.requestWithRotation(c => c.get(`/coins/${encodeURIComponent(coinId)}`));
+      const response = await this.requestWithRotation(`getCoinById(${coinId})`, (c) =>
+        c.get(`/coins/${encodeURIComponent(coinId)}`)
+      );
       const raw = response.data?.coin || response.data?.result || response.data;
       return mapCoinStatsCoin(raw);
     } catch (err: any) {
-      if (err.response?.status === 404) {
+      if (err.statusCode === 404 || err.response?.status === 404) {
         return null;
       }
-      console.error(`[CoinStatsProvider] Error fetching coin ${coinId}:`, err.message);
-      throw new AppError(
-        `Failed to fetch coin ${coinId} from provider: ${err.message}`,
-        err.response?.status || 502,
-        'PROVIDER_COIN_DETAIL_ERROR'
-      );
+      if (err instanceof ProviderError) throw err;
+      throw new ProviderError('CoinStats', `Failed to fetch coin ${coinId}: ${err.message}`, 502, 'COIN_DETAIL_ERROR', false, err);
     }
   }
 
   async getCoinChart(coinId: string, period: string = '1w'): Promise<ChartResponse> {
     if (!coinId) {
-      throw new AppError('coinId is required for chart data', 400, 'INVALID_COIN_ID');
+      throw new ProviderError('CoinStats', 'coinId is required for chart data', 400, 'INVALID_COIN_ID');
     }
 
-    // Supported periods in CoinStats: 24h, 1w, 1m, 3m, 6m, 1y, all
-    // Map common frontend period formats (e.g. 1H, 1D, 1W, 1M, 1Y, ALL) to CoinStats format
     let mappedPeriod = period.toLowerCase();
-    if (mappedPeriod === '1h') mappedPeriod = '24h'; // CoinStats min chart window is 24h
+    if (mappedPeriod === '1h') mappedPeriod = '24h';
     if (mappedPeriod === '1d' || mappedPeriod === 'd') mappedPeriod = '24h';
     if (mappedPeriod === '1w' || mappedPeriod === 'w') mappedPeriod = '1w';
     if (mappedPeriod === '1m' || mappedPeriod === 'm') mappedPeriod = '1m';
@@ -199,18 +208,16 @@ export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvi
     if (mappedPeriod === 'all') mappedPeriod = 'all';
 
     try {
-      const response = await this.requestWithRotation(c => c.get(`/coins/${encodeURIComponent(coinId)}/charts`, {
-        params: { period: mappedPeriod },
-      }));
+      const response = await this.requestWithRotation(`getCoinChart(${coinId})`, (c) =>
+        c.get(`/coins/${encodeURIComponent(coinId)}/charts`, {
+          params: { period: mappedPeriod },
+        })
+      );
 
       return mapCoinStatsChart(coinId, period, response.data);
     } catch (err: any) {
-      console.error(`[CoinStatsProvider] Error fetching chart for ${coinId} (${period}):`, err.message);
-      throw new AppError(
-        `Failed to fetch chart for ${coinId} from provider: ${err.message}`,
-        err.response?.status || 502,
-        'PROVIDER_CHART_ERROR'
-      );
+      if (err instanceof ProviderError) throw err;
+      throw new ProviderError('CoinStats', `Failed to fetch chart for ${coinId}: ${err.message}`, 502, 'CHART_ERROR', false, err);
     }
   }
 
@@ -220,59 +227,55 @@ export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvi
     }
 
     try {
-      // CoinStats supports search via ?name= or coin filtering
-      const response = await this.requestWithRotation(c => c.get('/coins', {
-        params: {
-          name: query.trim(),
-          limit: 20,
-        },
-      }));
+      const response = await this.requestWithRotation('searchCoins', (c) =>
+        c.get('/coins', {
+          params: {
+            name: query.trim(),
+            limit: 20,
+          },
+        })
+      );
 
       const rawResult = response.data?.result || response.data?.coins || response.data || [];
       return mapCoinStatsCoinList(Array.isArray(rawResult) ? rawResult : []);
     } catch (err: any) {
-      console.error(`[CoinStatsProvider] Error searching coins for "${query}":`, err.message);
-      throw new AppError(
-        `Failed to search coins from provider: ${err.message}`,
-        err.response?.status || 502,
-        'PROVIDER_SEARCH_ERROR'
-      );
+      if (err instanceof ProviderError) throw err;
+      throw new ProviderError('CoinStats', `Failed to search coins for "${query}": ${err.message}`, 502, 'SEARCH_ERROR', false, err);
     }
   }
 
   async getWalletBalance(blockchain: string, address: string): Promise<any[]> {
     if (!blockchain || !address) {
-      throw new AppError('blockchain and address are required', 400, 'INVALID_PARAMS');
+      throw new ProviderError('CoinStats', 'blockchain and address are required', 400, 'INVALID_PARAMS');
     }
 
     try {
-      const response = await this.requestWithRotation(c => c.get('/wallet/balance', {
-        params: {
-          blockchain,
-          address,
-        },
-      }));
+      const response = await this.requestWithRotation(`getWalletBalance(${blockchain})`, (c) =>
+        c.get('/wallet/balance', {
+          params: {
+            blockchain,
+            address,
+          },
+        })
+      );
 
       const raw = response.data;
-      if (Array.isArray(raw)) {
-        return raw;
-      }
-      if (raw?.result && Array.isArray(raw.result)) {
-        return raw.result;
-      }
-      if (raw?.coins && Array.isArray(raw.coins)) {
-        return raw.coins;
-      }
+      if (Array.isArray(raw)) return raw;
+      if (raw?.result && Array.isArray(raw.result)) return raw.result;
+      if (raw?.coins && Array.isArray(raw.coins)) return raw.coins;
       return [];
     } catch (err: any) {
-      console.error(`[CoinStatsProvider] Error fetching wallet balance (${blockchain}:${address}):`, err.message);
-      if (err.response?.status === 404) {
+      if (err.statusCode === 404 || err.response?.status === 404) {
         return [];
       }
-      throw new AppError(
+      if (err instanceof ProviderError) throw err;
+      throw new ProviderError(
+        'CoinStats',
         `Failed to fetch wallet balance: ${err.message}`,
-        err.response?.status || 502,
-        'PROVIDER_WALLET_BALANCE_ERROR'
+        err.statusCode || 502,
+        'WALLET_BALANCE_ERROR',
+        false,
+        err
       );
     }
   }
@@ -284,18 +287,20 @@ export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvi
     limit: number = 20
   ): Promise<{ result: any[]; meta?: any }> {
     if (!blockchain || !address) {
-      throw new AppError('blockchain and address are required', 400, 'INVALID_PARAMS');
+      throw new ProviderError('CoinStats', 'blockchain and address are required', 400, 'INVALID_PARAMS');
     }
 
     try {
-      const response = await this.requestWithRotation(c => c.get('/wallet/transactions', {
-        params: {
-          blockchain,
-          address,
-          page,
-          limit,
-        },
-      }));
+      const response = await this.requestWithRotation(`getWalletTransactions(${blockchain})`, (c) =>
+        c.get('/wallet/transactions', {
+          params: {
+            blockchain,
+            address,
+            page,
+            limit,
+          },
+        })
+      );
 
       const raw = response.data;
       const result = Array.isArray(raw?.result)
@@ -309,36 +314,35 @@ export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvi
         meta: raw?.meta || { page, limit, hasNextPage: result.length >= limit },
       };
     } catch (err: any) {
-      console.error(
-        `[CoinStatsProvider] Error fetching wallet transactions (${blockchain}:${address}):`,
-        err.message
-      );
-      if (err.response?.status === 404) {
+      if (err.statusCode === 404 || err.response?.status === 404) {
         return { result: [], meta: { page, limit, hasNextPage: false } };
       }
-      throw new AppError(
+      if (err instanceof ProviderError) throw err;
+      throw new ProviderError(
+        'CoinStats',
         `Failed to fetch wallet transactions: ${err.message}`,
-        err.response?.status || 502,
-        'PROVIDER_WALLET_TRANSACTIONS_ERROR'
+        err.statusCode || 502,
+        'WALLET_TRANSACTIONS_ERROR',
+        false,
+        err
       );
     }
   }
 
-  async getWalletDefi(
-    blockchain: string,
-    address: string
-  ): Promise<any> {
+  async getWalletDefi(blockchain: string, address: string): Promise<any> {
     if (!blockchain || !address) {
       return null;
     }
 
     try {
-      const response = await this.requestWithRotation(c => c.get('/wallet/defi', {
-        params: {
-          blockchain,
-          address,
-        },
-      }));
+      const response = await this.requestWithRotation(`getWalletDefi(${blockchain})`, (c) =>
+        c.get('/wallet/defi', {
+          params: {
+            blockchain,
+            address,
+          },
+        })
+      );
 
       return response.data;
     } catch (err: any) {
@@ -352,4 +356,3 @@ export class CoinStatsProvider implements MarketDataProvider, PortfolioDataProvi
 }
 
 export const coinStatsProvider = new CoinStatsProvider();
-

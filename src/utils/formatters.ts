@@ -1,5 +1,5 @@
 export function formatCompactNumber(num: number | undefined | null): string {
-  if (num === undefined || num === null || isNaN(num)) return '$0.00';
+  if (num === undefined || num === null || isNaN(num)) return '--';
 
   const abs = Math.abs(num);
   const sign = num < 0 ? '-' : '';
@@ -23,7 +23,7 @@ export function formatUsd(
   val: number | undefined | null,
   options?: { compactThreshold?: number; decimals?: number }
 ): string {
-  if (val === undefined || val === null || isNaN(val)) return '$0.00';
+  if (val === undefined || val === null || isNaN(val)) return '--';
 
   const abs = Math.abs(val);
   const sign = val < 0 ? '-$' : '$';
@@ -44,9 +44,9 @@ export function formatTokenBalance(
   amount: number | string | undefined | null,
   symbol?: string
 ): string {
-  if (amount === undefined || amount === null) return `0 ${symbol || ''}`.trim();
+  if (amount === undefined || amount === null) return symbol ? `-- ${symbol}` : '--';
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-  if (isNaN(num)) return `0 ${symbol || ''}`.trim();
+  if (isNaN(num)) return symbol ? `-- ${symbol}` : '--';
 
   let formatted: string;
   const abs = Math.abs(num);
@@ -80,7 +80,7 @@ export function formatTokenBalance(
 }
 
 export function formatPrice(price: number | undefined | null): string {
-  if (price === undefined || price === null || isNaN(price)) return '$0.00';
+  if (price === undefined || price === null || isNaN(price)) return '--';
 
   if (price >= 1000) {
     return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -98,7 +98,7 @@ export function formatPrice(price: number | undefined | null): string {
 }
 
 export function formatPercent(percent: number | undefined | null): string {
-  if (percent === undefined || percent === null || isNaN(percent)) return '0.00%';
+  if (percent === undefined || percent === null || isNaN(percent)) return '--';
 
   const prefix = percent > 0 ? '+' : '';
   return `${prefix}${percent.toFixed(2)}%`;

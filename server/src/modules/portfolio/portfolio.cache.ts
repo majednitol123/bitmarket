@@ -1,39 +1,21 @@
 import { cacheService } from '../../cache/cacheService';
+import { cacheKeys } from '../../cache/cacheKeys';
 
 export const portfolioCacheKeys = {
-  portfolio: (chain: string, address: string) =>
-    `portfolio:${chain.toLowerCase()}:${address.toLowerCase()}`,
-  holdings: (chain: string, address: string) =>
-    `holdings:${chain.toLowerCase()}:${address.toLowerCase()}`,
-  summary: (chain: string, address: string) =>
-    `summary:${chain.toLowerCase()}:${address.toLowerCase()}`,
-  chart: (chain: string, address: string, range: string) =>
-    `chart:${chain.toLowerCase()}:${address.toLowerCase()}:${range.toLowerCase()}`,
+  portfolio: (chain: string, address: string) => cacheKeys.portfolio(chain, address),
+  holdings: (chain: string, address: string) => cacheKeys.portfolioHoldings(chain, address),
+  summary: (chain: string, address: string) => cacheKeys.portfolioSummary(chain, address),
+  chart: (chain: string, address: string, range: string) => cacheKeys.portfolioChart(chain, address, range),
   transactions: (chain: string, address: string, page: number, limit: number) =>
-    `txs:${chain.toLowerCase()}:${address.toLowerCase()}:p${page}:l${limit}`,
-  defi: (chain: string, address: string) =>
-    `defi:${chain.toLowerCase()}:${address.toLowerCase()}`,
-  price: (chain: string, tokenAddress: string) =>
-    `price:${chain.toLowerCase()}:${tokenAddress.toLowerCase()}`,
+    cacheKeys.portfolioTransactions(chain, address, page, limit),
+  defi: (chain: string, address: string) => cacheKeys.portfolioDefi(chain, address),
+  price: (chain: string, tokenAddress: string) => cacheKeys.price(chain, tokenAddress),
 };
 
 export async function invalidatePortfolioCache(chain: string, address: string): Promise<void> {
   const c = chain.toLowerCase();
   const a = address.toLowerCase();
 
-  const keysToDelete = [
-    portfolioCacheKeys.portfolio(c, a),
-    portfolioCacheKeys.holdings(c, a),
-    portfolioCacheKeys.summary(c, a),
-    portfolioCacheKeys.defi(c, a),
-    portfolioCacheKeys.chart(c, a, '1d'),
-    portfolioCacheKeys.chart(c, a, '1w'),
-    portfolioCacheKeys.chart(c, a, '1m'),
-    portfolioCacheKeys.chart(c, a, '1y'),
-    portfolioCacheKeys.chart(c, a, 'all'),
-    portfolioCacheKeys.transactions(c, a, 1, 10),
-    portfolioCacheKeys.transactions(c, a, 1, 20),
-  ];
-
-  await Promise.allSettled(keysToDelete.map((k) => cacheService.delete(k)));
+  // Non-blocking pattern invalidation clears all sub-keys for this wallet across any timeframe/page
+  await cacheService.invalidatePattern(`*${c}*${a}*`);
 }

@@ -1,7 +1,12 @@
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
+import * as Crypto from "expo-crypto";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import { store } from "../store";
+import { notificationApi } from "../api/notificationApi";
+
+const DEVICE_ID_STORAGE_KEY = "@bitmarket_device_id";
 
 // ─── Configure notification handler (how notifications are displayed when app is in foreground) ───
 Notifications.setNotificationHandler({
@@ -24,8 +29,27 @@ export function areNotificationsEnabled(): boolean {
   }
 }
 
+/**
+ * Retrieves or generates a persistent device UUID for this installation
+ */
+export async function getOrCreateDeviceIdAsync(): Promise<string> {
+  try {
+    let deviceId = await AsyncStorage.getItem(DEVICE_ID_STORAGE_KEY);
+    if (!deviceId) {
+      deviceId = Crypto.randomUUID();
+      await AsyncStorage.setItem(DEVICE_ID_STORAGE_KEY, deviceId);
+    }
+    return deviceId;
+  } catch (e) {
+    return "dev-" + Math.random().toString(36).substring(2, 12);
+  }
+}
+
 // ─── Register for push notifications and get the Expo Push Token ───
-export async function registerForPushNotificationsAsync(): Promise<string | null> {
+export async function registerForPushNotificationsAsync(
+  walletAddress?: string
+): Promise<{ token: string | null; deviceId: string }> {
+  const deviceId = await getOrCreateDeviceIdAsync();
   let token: string | null = null;
 
   // Android notification channel (must run even on simulator so local notifications work)
@@ -42,53 +66,84 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     }
   }
 
-  // Push notifications only work on physical devices for remote push
-  if (!Device.isDevice) {
-    if (__DEV__) console.log("[Notifications] Running on simulator — push token unavailable, local notifications active.");
-    return null;
+  // Push notifications on physical devices
+  if (Device.isDevice) {
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== "granted") {
+        const { status } = await Notifications.requestPermissionsAsync({
+          ios: {
+            allowAlert: true,
+            allowBadge: true,
+            allowSound: true,
+            allowProvisional: true,
+          },
+        });
+        finalStatus = status;
+      }
+
+      if (finalStatus === "granted") {
+        try {
+          const pushToken = await Notifications.getExpoPushTokenAsync({
+            projectId: "7e6399b3-7de1-4548-bfe8-7d91129eeeeb",
+          });
+          token = pushToken.data;
+          if (__DEV__) console.log("[Notifications] Expo Push Token:", token);
+        } catch (e: any) {
+          if (__DEV__) console.log("[Notifications] Remote push token unavailable:", e?.message || e);
+        }
+      }
+    } catch (e: any) {
+      if (__DEV__) console.log("[Notifications] Permission/token check error:", e?.message || e);
+    }
+  } else {
+    if (__DEV__) console.log("[Notifications] Running on simulator/emulator. Using simulated push registration.");
+    // In simulator / development, generate a well-formed simulated token format
+    token = `ExponentPushToken[sim-${deviceId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 16)}]`;
   }
 
-  // Request permissions (iOS requires explicit alert/badge/sound options)
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-
-  if (existingStatus !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync({
-      ios: {
-        allowAlert: true,
-        allowBadge: true,
-        allowSound: true,
-        allowProvisional: true, // iOS 12+ quiet notifications without explicit permission
-      },
-    });
-    finalStatus = status;
+  // If a wallet address is connected and we have a token, register with backend
+  if (walletAddress && token) {
+    try {
+      await notificationApi.registerDevice({
+        walletAddress,
+        deviceId,
+        expoPushToken: token,
+        platform: Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web",
+        appVersion: "1.0.0",
+        enabled: areNotificationsEnabled(),
+      });
+      if (__DEV__) console.log("[Notifications] Device registered with backend for wallet:", walletAddress);
+    } catch (err: any) {
+      if (__DEV__) console.warn("[Notifications] Backend registration warning:", err?.message || err);
+    }
   }
 
-  if (finalStatus !== "granted") {
-    if (__DEV__) console.log("[Notifications] Permission not granted.");
-    return null;
-  }
+  return { token, deviceId };
+}
 
-  // Get push token (requires a real device + EAS project + FCM credentials on Android)
+/**
+ * Synchronizes device registration and push enabled status with backend
+ */
+export async function syncDeviceRegistrationAsync(
+  walletAddress: string,
+  enabled?: boolean
+): Promise<void> {
   try {
-    const pushToken = await Notifications.getExpoPushTokenAsync({
-      projectId: "7e6399b3-7de1-4548-bfe8-7d91129eeeeb",
-    });
-    token = pushToken.data;
-    if (__DEV__) console.log("[Notifications] Expo Push Token:", token);
-  } catch (e: any) {
-    if (__DEV__) console.log("[Notifications] Remote push token unavailable (FCM credentials not configured):", e?.message || e);
-  }
+    const deviceId = await getOrCreateDeviceIdAsync();
+    const isEnabled = enabled !== undefined ? enabled : areNotificationsEnabled();
 
-  // Also get the native device push token (APNs for iOS, FCM for Android)
-  try {
-    const deviceToken = await Notifications.getDevicePushTokenAsync();
-    if (__DEV__) console.log("[Notifications] Native Device Token:", deviceToken.data);
-  } catch (e: any) {
-    if (__DEV__) console.log("[Notifications] Native device token unavailable:", e?.message || e);
-  }
+    // Re-register or update status
+    await registerForPushNotificationsAsync(walletAddress);
 
-  return token;
+    if (!isEnabled) {
+      await notificationApi.unregisterDevice({ deviceId });
+    }
+  } catch (err: any) {
+    if (__DEV__) console.warn("[Notifications] syncDeviceRegistration error:", err?.message || err);
+  }
 }
 
 // ─── Send a local notification (checks user setting) ───

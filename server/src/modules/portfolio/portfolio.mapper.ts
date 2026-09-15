@@ -79,7 +79,7 @@ export function mapCoinStatsHoldings(
   const holdings: PortfolioHolding[] = validTokens.map((raw) => {
     const amount = Number(raw.amount || 0);
     const priceUsd = Number(raw.price || 0);
-    const valueUsd = Math.round(amount * priceUsd * 100) / 100;
+    const valueUsd = priceUsd > 0 ? Math.round(amount * priceUsd * 100) / 100 : null;
     const symbol = String(raw.symbol || 'UNKNOWN').toUpperCase();
     const contractAddress = raw.contractAddress || undefined;
     const id = contractAddress ? `${chain}:${contractAddress}` : `${chain}:native`;
@@ -102,25 +102,28 @@ export function mapCoinStatsHoldings(
     };
   });
 
-  // 3. Sort by total value descending
-  holdings.sort((a, b) => b.valueUsd - a.valueUsd);
+  // 3. Sort by total value descending (unpriced tokens placed at end)
+  holdings.sort((a, b) => (b.valueUsd || 0) - (a.valueUsd || 0));
 
-  // 4. Calculate total portfolio value
-  const totalValueUsd = holdings.reduce((sum, h) => sum + h.valueUsd, 0);
+  // 4. Calculate total portfolio value from priced holdings
+  const totalValueUsd = holdings.reduce((sum, h) => sum + (h.valueUsd || 0), 0);
 
   // 5. Calculate allocations
   holdings.forEach((h) => {
     h.allocationPercent =
-      totalValueUsd > 0 ? Math.round((h.valueUsd / totalValueUsd) * 10000) / 100 : 0;
+      totalValueUsd > 0 && h.valueUsd !== null
+        ? Math.round((h.valueUsd / totalValueUsd) * 10000) / 100
+        : 0;
   });
 
   // 6. Calculate 24h weighted change
   let totalPriorValue = 0;
   holdings.forEach((h) => {
-    const changeFactor = 1 + h.change24hPercent / 100;
-    // Guard against division by zero or extreme negatives
-    const priorTokenVal = changeFactor > 0 ? h.valueUsd / changeFactor : h.valueUsd;
-    totalPriorValue += priorTokenVal;
+    if (h.valueUsd !== null && h.valueUsd > 0) {
+      const changeFactor = 1 + h.change24hPercent / 100;
+      const priorTokenVal = changeFactor > 0 ? h.valueUsd / changeFactor : h.valueUsd;
+      totalPriorValue += priorTokenVal;
+    }
   });
 
   const change24hUsd =
@@ -156,12 +159,13 @@ export function mapCoinStatsTransactions(
     const hash =
       typeof rawHash === 'object' && rawHash !== null
         ? String(rawHash.id || '')
-        : String(rawHash || tx.transactionHash || `tx-${index}`);
+        : String(rawHash || tx.transactionHash || '');
 
-    const explorerUrl =
-      typeof rawHash === 'object' && rawHash?.explorerUrl
-        ? String(rawHash.explorerUrl)
-        : getExplorerTxUrl(chain, hash);
+    const explorerUrl = hash
+      ? (typeof rawHash === 'object' && rawHash?.explorerUrl
+          ? String(rawHash.explorerUrl)
+          : getExplorerTxUrl(chain, hash))
+      : '';
 
     const firstSubTx = tx.transactions?.[0]?.items?.[0] || {};
     const mainContent = tx.mainContent || {};
@@ -193,7 +197,7 @@ export function mapCoinStatsTransactions(
       '';
 
     return {
-      id: hash || `tx-${index}`,
+      id: hash || (tx.id ? String(tx.id) : `tx-${dateMs}-${index}`),
       type,
       date: dateMs,
       hash,
@@ -273,7 +277,7 @@ export function buildPortfolioChartData(
       high: Math.round(high * 100) / 100,
       low: Math.round(low * 100) / 100,
       close: Math.round(close * 100) / 100,
-      volume: Math.round(open * 0.05), // Synthetic volume estimate for chart display
+      volume: 0,
     });
   }
 
@@ -295,12 +299,7 @@ export function buildPortfolioChartData(
     isPositive,
     high: `$${maxVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
     low: `$${minVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-    volume24h:
-      lastVal * 0.15 >= 1e6
-        ? `$${((lastVal * 0.15) / 1e6).toFixed(2)}M`
-        : lastVal * 0.15 >= 1e3
-        ? `$${((lastVal * 0.15) / 1e3).toFixed(1)}K`
-        : `$${(lastVal * 0.15).toLocaleString('en-US', { maximumFractionDigits: 0 })}`,
+    volume24h: '--',
   };
 }
 
@@ -338,7 +337,7 @@ export function mapCoinStatsDefi(
 
         const apyStr = inv.apy != null && Number(inv.apy) > 0
           ? `${Number(inv.apy).toFixed(2)}%`
-          : '3.50%';
+          : 'N/A';
 
         const earningsStr = inv.earnings != null && Number(inv.earnings) > 0
           ? `+$${Number(inv.earnings).toFixed(2)}`
@@ -359,26 +358,26 @@ export function mapCoinStatsDefi(
   }
 
   // 2. Scan wallet holdings for recognized staking/lending tokens
-  const recognizedDeFiTokens: Record<string, { protocol: string; pool: string; type: string; apy: string; icon?: string }> = {
-    STETH: { protocol: 'Lido', pool: 'stETH Liquid Staking', type: 'Liquid Staking', apy: '3.40%', icon: 'https://static.coinstats.app/coins/1679051061908.png' },
-    WSTETH: { protocol: 'Lido', pool: 'wstETH Wrapped Staking', type: 'Liquid Staking', apy: '3.40%', icon: 'https://static.coinstats.app/coins/1679051061908.png' },
-    RETH: { protocol: 'Rocket Pool', pool: 'rETH Liquid Staking', type: 'Liquid Staking', apy: '3.10%', icon: 'https://static.coinstats.app/coins/1633512403657.png' },
-    CBETH: { protocol: 'Coinbase', pool: 'cbETH Liquid Staking', type: 'Liquid Staking', apy: '3.20%' },
-    SDAI: { protocol: 'Maker / Sky', pool: 'Savings DAI Vault', type: 'Yield Vault', apy: '5.00%' },
-    EZETH: { protocol: 'Renzo', pool: 'ezETH Restaking Pool', type: 'Liquid Restaking', apy: '3.90%' },
-    WEETH: { protocol: 'ether.fi', pool: 'weETH Staking Vault', type: 'Liquid Restaking', apy: '4.10%' },
-    AWETH: { protocol: 'Aave V3', pool: 'WETH Supply Market', type: 'Lending Deposit', apy: '2.80%' },
-    ADAI: { protocol: 'Aave V3', pool: 'DAI Supply Market', type: 'Lending Deposit', apy: '4.20%' },
-    AUSDC: { protocol: 'Aave V3', pool: 'USDC Supply Market', type: 'Lending Deposit', apy: '4.50%' },
-    AWBTC: { protocol: 'Aave V3', pool: 'WBTC Supply Market', type: 'Lending Deposit', apy: '1.50%' },
-    CUSDC: { protocol: 'Compound', pool: 'USDC Market', type: 'Lending Deposit', apy: '3.80%' },
-    CAKE: { protocol: 'PancakeSwap', pool: 'Syrup Pool Staking', type: 'Yield Staking', apy: '7.80%' },
+  const recognizedDeFiTokens: Record<string, { protocol: string; pool: string; type: string; apy?: string; icon?: string }> = {
+    STETH: { protocol: 'Lido', pool: 'stETH Liquid Staking', type: 'Liquid Staking', icon: 'https://static.coinstats.app/coins/1679051061908.png' },
+    WSTETH: { protocol: 'Lido', pool: 'wstETH Wrapped Staking', type: 'Liquid Staking', icon: 'https://static.coinstats.app/coins/1679051061908.png' },
+    RETH: { protocol: 'Rocket Pool', pool: 'rETH Liquid Staking', type: 'Liquid Staking', icon: 'https://static.coinstats.app/coins/1633512403657.png' },
+    CBETH: { protocol: 'Coinbase', pool: 'cbETH Liquid Staking', type: 'Liquid Staking' },
+    SDAI: { protocol: 'Maker / Sky', pool: 'Savings DAI Vault', type: 'Yield Vault' },
+    EZETH: { protocol: 'Renzo', pool: 'ezETH Restaking Pool', type: 'Liquid Restaking' },
+    WEETH: { protocol: 'ether.fi', pool: 'weETH Staking Vault', type: 'Liquid Restaking' },
+    AWETH: { protocol: 'Aave V3', pool: 'WETH Supply Market', type: 'Lending Deposit' },
+    ADAI: { protocol: 'Aave V3', pool: 'DAI Supply Market', type: 'Lending Deposit' },
+    AUSDC: { protocol: 'Aave V3', pool: 'USDC Supply Market', type: 'Lending Deposit' },
+    AWBTC: { protocol: 'Aave V3', pool: 'WBTC Supply Market', type: 'Lending Deposit' },
+    CUSDC: { protocol: 'Compound', pool: 'USDC Market', type: 'Lending Deposit' },
+    CAKE: { protocol: 'PancakeSwap', pool: 'Syrup Pool Staking', type: 'Yield Staking' },
   };
 
   for (const h of holdings) {
     const sym = (h.symbol || '').toUpperCase();
     const config = recognizedDeFiTokens[sym];
-    if (config && h.valueUsd >= 0.05) {
+    if (config && typeof h.valueUsd === 'number' && h.valueUsd >= 0.05) {
       const key = `${config.protocol.toLowerCase()}:${config.pool.toLowerCase()}`;
       if (seenKeys.has(key)) continue;
       seenKeys.add(key);
@@ -388,7 +387,7 @@ export function mapCoinStatsDefi(
         pool: config.pool,
         type: config.type,
         deposited: `$${h.valueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        apy: config.apy,
+        apy: config.apy || 'N/A',
         earnings: 'Yield Active',
         chain,
         icon: config.icon || h.logoUrl,

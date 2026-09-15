@@ -20,7 +20,8 @@ export class PortfolioController {
   async getPortfolio(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { chain, address } = extractParams(req);
-      const data = await portfolioService.getPortfolio(chain, address);
+      const forceRefresh = req.query.refresh === 'true' || req.query.force === 'true';
+      const data = await portfolioService.getPortfolio(chain, address, forceRefresh);
       res.json({
         success: true,
         data,
@@ -44,7 +45,8 @@ export class PortfolioController {
   async getSummary(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { chain, address } = extractParams(req);
-      const data = await portfolioService.getSummary(chain, address);
+      const forceRefresh = req.query.refresh === 'true' || req.query.force === 'true';
+      const data = await portfolioService.getSummary(chain, address, forceRefresh);
       res.json({
         success: true,
         data,
@@ -57,7 +59,8 @@ export class PortfolioController {
   async getHoldings(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { chain, address } = extractParams(req);
-      const data = await portfolioService.getHoldings(chain, address);
+      const forceRefresh = req.query.refresh === 'true' || req.query.force === 'true';
+      const data = await portfolioService.getHoldings(chain, address, forceRefresh);
       res.json({
         success: true,
         data,
@@ -146,7 +149,7 @@ export class PortfolioController {
     try {
       const { chain, address } = extractParams(req);
       await portfolioService.invalidateCache(chain, address);
-      const freshData = await portfolioService.getPortfolio(chain, address);
+      const freshData = await portfolioService.getPortfolio(chain, address, true);
       res.json({
         success: true,
         data: freshData,

@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { config } from '../config/env';
 
 export class AppError extends Error {
   public statusCode: number;
@@ -21,23 +22,31 @@ export function errorHandler(
   res: Response,
   next: NextFunction
 ): void {
+  const isAppError = err instanceof AppError;
   const statusCode = (err as AppError).statusCode || 500;
-  const code = (err as AppError).code || 'INTERNAL_ERROR';
-  const message = err.message || 'An unexpected error occurred';
+  const code = (err as AppError).code || (statusCode >= 500 ? 'INTERNAL_SERVER_ERROR' : 'BAD_REQUEST');
+  const rawMessage = err.message || 'An unexpected error occurred';
   const details = (err as AppError).details;
+  const requestId = req.id;
+
+  // In production, never leak internal 500 server stack traces or database errors
+  const safeMessage = (config.isProduction && statusCode >= 500 && !isAppError)
+    ? 'An internal server error occurred'
+    : rawMessage;
 
   if (statusCode >= 500) {
-    console.error(`[Error] ${req.method} ${req.originalUrl}:`, err);
+    console.error(`[Error] [${requestId || 'no-id'}] ${req.method} ${req.originalUrl} (${statusCode}):`, err);
   } else {
-    console.warn(`[Warning] ${req.method} ${req.originalUrl} (${statusCode}):`, message);
+    console.warn(`[Warning] [${requestId || 'no-id'}] ${req.method} ${req.originalUrl} (${statusCode}):`, rawMessage);
   }
 
   res.status(statusCode).json({
     success: false,
     error: {
       code,
-      message,
+      message: safeMessage,
       ...(details ? { details } : {}),
+      ...(requestId ? { requestId } : {}),
     },
   });
 }

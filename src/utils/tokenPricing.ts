@@ -1,89 +1,58 @@
 // ═══════════════════════════════════════════════════════════
 // TOKEN PRICING & SWAP ESTIMATION UTILITIES
+// Live dynamic prices populated from market and portfolio APIs
 // ═══════════════════════════════════════════════════════════
 
-export const TOKEN_USD_PRICES: Record<string, number> = {
-  ETH: 2642.50,
-  WETH: 2642.50,
-  stETH: 2642.50,
-  BTC: 64520.00,
-  WBTC: 64520.00,
-  USDT: 1.00,
-  USDC: 1.00,
-  DAI: 1.00,
-  xDAI: 1.00,
-  BNB: 582.10,
-  SOL: 138.45,
-  AVAX: 28.30,
-  FTM: 0.52,
-  MATIC: 0.42,
-  POL: 0.42,
-  CRO: 0.09,
-  CELO: 0.54,
-  GLMR: 0.22,
-  MOVR: 12.40,
-  MNT: 0.78,
-  LINK: 11.60,
-  UNI: 7.85,
-  AAVE: 142.50,
-  MKR: 1940.00,
-  LDO: 1.15,
-  CRV: 0.31,
-  SHIB: 0.0000185,
-  PEPE: 0.0000092,
-  APE: 0.78,
-  SNX: 1.65,
-  COMP: 48.20,
-  ENS: 18.40,
-  GRT: 0.18,
-  "1INCH": 0.32,
-  SUSHI: 0.82,
-  FXS: 2.40,
-  RPL: 19.50,
-  BAL: 2.10,
-};
+export const LIVE_TOKEN_USD_PRICES: Record<string, number> = {};
+
+// Keep backwards-compatible alias
+export const TOKEN_USD_PRICES = LIVE_TOKEN_USD_PRICES;
 
 /**
  * Dynamically update token price from live market data
  */
 export function updateTokenPrice(symbol: string, price: number): void {
   if (!symbol || typeof price !== 'number' || isNaN(price) || price <= 0) return;
-  TOKEN_USD_PRICES[symbol.toUpperCase()] = price;
+  LIVE_TOKEN_USD_PRICES[symbol.toUpperCase()] = price;
 }
 
 /**
- * Bulk update token prices from live market tokens list
+ * Bulk update token prices from live market tokens list or portfolio holdings
  */
-export function updateTokenPrices(tokens: { symbol: string; priceUsd?: number }[]): void {
+export function updateTokenPrices(tokens: { symbol: string; priceUsd?: number | null }[]): void {
   if (!Array.isArray(tokens)) return;
   for (const t of tokens) {
     if (t?.symbol && typeof t.priceUsd === 'number' && t.priceUsd > 0) {
-      TOKEN_USD_PRICES[t.symbol.toUpperCase()] = t.priceUsd;
+      LIVE_TOKEN_USD_PRICES[t.symbol.toUpperCase()] = t.priceUsd;
     }
   }
 }
 
 /**
  * Get USD price for a given token symbol.
+ * Returns null if price is unavailable or unknown.
  */
-export function getTokenPrice(symbol?: string): number {
-  if (!symbol) return 1.0;
+export function getTokenPrice(symbol?: string): number | null {
+  if (!symbol) return null;
   const sym = symbol.toUpperCase();
-  return TOKEN_USD_PRICES[sym] ?? 1.0;
+  const price = LIVE_TOKEN_USD_PRICES[sym];
+  return typeof price === 'number' && price > 0 ? price : null;
 }
 
 /**
  * Calculate the exchange rate from Token A to Token B.
+ * Returns null if either token's price is unknown or <= 0.
  */
-export function getExchangeRate(fromSymbol?: string, toSymbol?: string): number {
+export function getExchangeRate(fromSymbol?: string, toSymbol?: string): number | null {
   const fromPrice = getTokenPrice(fromSymbol);
   const toPrice = getTokenPrice(toSymbol);
-  if (toPrice === 0) return 1.0;
+  if (fromPrice === null || toPrice === null || toPrice <= 0) return null;
   return fromPrice / toPrice;
 }
 
 /**
  * Calculate expected receive amount from a pay amount.
+ * Returns empty string if either token price is unknown or input is invalid.
  */
 export function calculateToAmount(
   fromAmount: string,
@@ -94,6 +63,9 @@ export function calculateToAmount(
     return "";
   }
   const rate = getExchangeRate(fromSymbol, toSymbol);
+  if (rate === null) {
+    return "";
+  }
   const result = Number(fromAmount) * rate;
   if (result >= 1000) {
     return result.toFixed(2);
@@ -109,7 +81,8 @@ export function calculateToAmount(
 /**
  * Format a number to currency/compact string.
  */
-export function formatUsd(amount: number): string {
+export function formatUsd(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined || isNaN(amount)) return "--";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
