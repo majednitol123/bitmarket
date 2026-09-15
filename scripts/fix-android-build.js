@@ -39,4 +39,17 @@ function patchAndroidBuild() {
   }
 }
 
+function patchGradleProperties() {
+  const gradlePropsPath = path.join(__dirname, '../android/gradle.properties');
+  if (!fs.existsSync(gradlePropsPath)) return;
+
+  let props = fs.readFileSync(gradlePropsPath, 'utf8');
+  if (props.includes('org.gradle.jvmargs=')) {
+    props = props.replace(/org\.gradle\.jvmargs=.*/, 'org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:+HeapDumpOnOutOfMemoryError');
+    fs.writeFileSync(gradlePropsPath, props, 'utf8');
+    console.log('[+] Configured Gradle JVM args with 4GB heap and 1024MB Metaspace.');
+  }
+}
+
 patchAndroidBuild();
+patchGradleProperties();
