@@ -83,6 +83,10 @@ export const appKit = createAppKit({
   defaultNetwork: mainnet as unknown as AppKitNetwork,
   adapters: [ethersAdapter, solanaAdapter],
   storage: appKitStorage,
+  themeMode: "dark",
+  themeVariables: {
+    accent: "#8B5CF6",
+  },
   metadata: {
     name: "BitMarket",
     description: "Multi-chain crypto exchange and wallet aggregator",

@@ -13,9 +13,11 @@ import {
   Switch,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
+import { useTheme } from "styled-components/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAccount } from "@reown/appkit-react-native";
 import { AppDispatch, RootState } from "../../store";
+import { ThemeType } from "../../styles/theme";
 import {
   fetchAlerts,
   createAlert,
@@ -72,6 +74,10 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
   walletAddress: propWallet,
   onAlertCreated,
 }) => {
+  const theme = useTheme() as ThemeType;
+  const isDark = theme?.colors?.cardBackground !== "#FFFFFF";
+  const styles = useMemo(() => createStyles(theme, isDark), [theme, isDark]);
+
   const dispatch = useDispatch<AppDispatch>();
   const { address } = useAccount();
   const effectiveWallet = propWallet || address || "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
@@ -283,7 +289,7 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
               <View style={styles.bellBadge}>
-                <BellIcon size={18} color="#38BDF8" />
+                <BellIcon size={18} color={theme.colors.primary} />
               </View>
               <View>
                 <Text style={styles.titleText}>Price Alerts</Text>
@@ -297,7 +303,7 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
               style={styles.closeBtn}
               activeOpacity={0.7}
             >
-              <CloseIcon size={16} color="#94A3B8" />
+              <CloseIcon size={16} color={isDark ? "#94A3B8" : "#64748B"} />
             </TouchableOpacity>
           </View>
 
@@ -381,7 +387,7 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
           {/* Success Banner */}
           {isSuccess && (
             <View style={styles.successBox}>
-              <CheckCircleIcon size={18} color="#10B981" />
+              <CheckCircleIcon size={18} color={isDark ? "#10B981" : "#059669"} />
               <Text style={styles.successText}>Alert armed successfully!</Text>
             </View>
           )}
@@ -405,7 +411,7 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
                 >
                   <ArrowUpIcon
                     size={16}
-                    color={condition === "above" ? "#10B981" : "#94A3B8"}
+                    color={condition === "above" ? (isDark ? "#10B981" : "#059669") : (isDark ? "#94A3B8" : "#64748B")}
                   />
                   <Text
                     style={[
@@ -427,7 +433,7 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
                 >
                   <ArrowDownIcon
                     size={16}
-                    color={condition === "below" ? "#F43F5E" : "#94A3B8"}
+                    color={condition === "below" ? (isDark ? "#F43F5E" : "#E11D48") : (isDark ? "#94A3B8" : "#64748B")}
                   />
                   <Text
                     style={[
@@ -451,15 +457,15 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
                         {
                           backgroundColor:
                             pctDiff >= 0
-                              ? "rgba(16, 185, 129, 0.15)"
-                              : "rgba(244, 63, 94, 0.15)",
+                              ? (isDark ? "rgba(16, 185, 129, 0.15)" : "rgba(16, 185, 129, 0.12)")
+                              : (isDark ? "rgba(244, 63, 94, 0.15)" : "rgba(244, 63, 94, 0.12)"),
                         },
                       ]}
                     >
                       <Text
                         style={[
                           styles.pctBadgeText,
-                          { color: pctDiff >= 0 ? "#10B981" : "#F43F5E" },
+                          { color: pctDiff >= 0 ? (isDark ? "#10B981" : "#059669") : (isDark ? "#F43F5E" : "#E11D48") },
                         ]}
                       >
                         {pctDiff >= 0 ? `+${pctDiff.toFixed(2)}%` : `${pctDiff.toFixed(2)}%`}{" "}
@@ -479,7 +485,7 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
                       setErrorMsg(null);
                     }}
                     placeholder="0.00"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor={isDark ? "#64748B" : "#94A3B8"}
                     keyboardType="decimal-pad"
                     autoFocus={false}
                   />
@@ -492,7 +498,7 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
                     activeOpacity={0.8}
                     onPress={() => setActiveTab("list")}
                   >
-                    <InfoIcon size={16} color="#F59E0B" />
+                    <InfoIcon size={16} color={isDark ? "#F59E0B" : "#D97706"} />
                     <View style={styles.duplicateWarningContent}>
                       <Text style={styles.duplicateWarningTitle}>Alert Already Active</Text>
                       <Text style={styles.duplicateWarningText}>
@@ -506,7 +512,7 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
                 {/* Inactive Alert Matching Re-arm Notification */}
                 {!duplicateAlert && existingInactiveAlert && (
                   <View style={styles.rearmInfoBox}>
-                    <RotateCcwIcon size={14} color="#38BDF8" />
+                    <RotateCcwIcon size={14} color={isDark ? "#38BDF8" : "#0284C7"} />
                     <Text style={styles.rearmInfoText}>
                       A matching inactive alert will be re-armed when submitted.
                     </Text>
@@ -576,7 +582,7 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
                 <LinearGradient
                   colors={
                     duplicateAlert
-                      ? ["#334155", "#1E293B"]
+                      ? (isDark ? ["#334155", "#1E293B"] : ["#CBD5E1", "#94A3B8"])
                       : condition === "above"
                       ? ["#059669", "#10B981"]
                       : ["#E11D48", "#F43F5E"]
@@ -594,8 +600,8 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
                     </View>
                   ) : duplicateAlert ? (
                     <View style={styles.btnContentRow}>
-                      <InfoIcon size={18} color="#94A3B8" />
-                      <Text style={[styles.submitBtnText, { color: "#94A3B8" }]}>
+                      <InfoIcon size={18} color={isDark ? "#94A3B8" : "#475569"} />
+                      <Text style={[styles.submitBtnText, { color: isDark ? "#94A3B8" : "#334155" }]}>
                         Alert Already Armed
                       </Text>
                     </View>
@@ -626,7 +632,7 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
               {tokenAlerts.length === 0 ? (
                 <View style={styles.emptyListContainer}>
                   <View style={styles.emptyIconCircle}>
-                    <BellIcon size={24} color="#64748B" />
+                    <BellIcon size={24} color={isDark ? "#64748B" : "#94A3B8"} />
                   </View>
                   <Text style={styles.emptyTitle}>No Alerts for {tokenSymbol}</Text>
                   <Text style={styles.emptySubtitle}>
@@ -662,9 +668,9 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
                             ]}
                           >
                             {alert.condition === "above" ? (
-                              <ArrowUpIcon size={14} color="#10B981" />
+                              <ArrowUpIcon size={14} color={isDark ? "#10B981" : "#059669"} />
                             ) : (
-                              <ArrowDownIcon size={14} color="#F43F5E" />
+                              <ArrowDownIcon size={14} color={isDark ? "#F43F5E" : "#E11D48"} />
                             )}
                           </View>
                           <View>
@@ -740,7 +746,7 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
                               onPress={() => handleRearm(alert.id)}
                               disabled={isOperating}
                             >
-                              <RotateCcwIcon size={14} color="#38BDF8" />
+                              <RotateCcwIcon size={14} color={isDark ? "#38BDF8" : "#0284C7"} />
                               <Text style={styles.rearmBtnText}>Re-arm</Text>
                             </TouchableOpacity>
                           )}
@@ -749,8 +755,11 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
                           <Switch
                             value={alert.enabled}
                             onValueChange={() => handleToggleEnabled(alert.id, alert.enabled)}
-                            trackColor={{ false: "rgba(255,255,255,0.1)", true: "#059669" }}
-                            thumbColor={alert.enabled ? "#10B981" : "#94A3B8"}
+                            trackColor={{
+                              false: isDark ? "rgba(255,255,255,0.1)" : "#CBD5E1",
+                              true: isDark ? "#059669" : "#10B981",
+                            }}
+                            thumbColor={alert.enabled ? "#FFFFFF" : (isDark ? "#94A3B8" : "#FFFFFF")}
                             style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                             disabled={isOperating}
                           />
@@ -782,560 +791,575 @@ export const PriceAlertModal: React.FC<PriceAlertModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.78)",
-    justifyContent: "flex-end",
-  },
-  backdropPressable: {
-    flex: 1,
-  },
-  sheetContainer: {
-    backgroundColor: "#0B0F19",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-    paddingTop: 12,
-    paddingHorizontal: 20,
-    paddingBottom: Platform.OS === "ios" ? 40 : 24,
-    maxHeight: "88%",
-  },
-  grabHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    alignSelf: "center",
-    marginBottom: 16,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  bellBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: "rgba(56, 189, 248, 0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(56, 189, 248, 0.25)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  titleText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "700",
-    letterSpacing: -0.2,
-  },
-  subtitleText: {
-    color: "#94A3B8",
-    fontSize: 12,
-    marginTop: 2,
-  },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modeTabsContainer: {
-    flexDirection: "row",
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    borderRadius: 12,
-    padding: 3,
-    marginBottom: 14,
-  },
-  modeTab: {
-    flex: 1,
-    paddingVertical: 9,
-    alignItems: "center",
-    borderRadius: 9,
-  },
-  modeTabActive: {
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-  },
-  modeTabText: {
-    color: "#94A3B8",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  modeTabTextActive: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-  tokenCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-    padding: 14,
-    marginBottom: 14,
-  },
-  tokenCardLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  tokenCardSymbol: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  tokenCardName: {
-    color: "#94A3B8",
-    fontSize: 12,
-    marginTop: 2,
-    maxWidth: 120,
-  },
-  tokenCardRight: {
-    alignItems: "flex-end",
-  },
-  livePriceLabel: {
-    color: "#64748B",
-    fontSize: 11,
-    fontWeight: "500",
-  },
-  livePriceValue: {
-    color: "#FFFFFF",
-    fontSize: 17,
-    fontWeight: "700",
-    marginTop: 2,
-  },
-  scrollBody: {
-    gap: 14,
-    paddingBottom: 20,
-  },
-  directionToggleContainer: {
-    flexDirection: "row",
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    borderRadius: 14,
-    padding: 4,
-    gap: 6,
-  },
-  directionTab: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-    borderRadius: 10,
-    gap: 6,
-  },
-  directionTabActiveAbove: {
-    backgroundColor: "rgba(16, 185, 129, 0.15)",
-    borderWidth: 1,
-    borderColor: "rgba(16, 185, 129, 0.35)",
-  },
-  directionTabActiveBelow: {
-    backgroundColor: "rgba(244, 63, 94, 0.15)",
-    borderWidth: 1,
-    borderColor: "rgba(244, 63, 94, 0.35)",
-  },
-  directionTabText: {
-    color: "#94A3B8",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  directionTabTextActiveAbove: {
-    color: "#10B981",
-    fontWeight: "700",
-  },
-  directionTabTextActiveBelow: {
-    color: "#F43F5E",
-    fontWeight: "700",
-  },
-  inputSection: {
-    gap: 8,
-  },
-  inputLabelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  inputLabel: {
-    color: "#E2E8F0",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  pctBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  pctBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
-    paddingHorizontal: 16,
-    height: 52,
-  },
-  currencyPrefix: {
-    color: "#64748B",
-    fontSize: 20,
-    fontWeight: "700",
-    marginRight: 6,
-  },
-  textInput: {
-    flex: 1,
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "700",
-    padding: 0,
-  },
-  presetSection: {
-    gap: 8,
-  },
-  sectionSmallLabel: {
-    color: "#94A3B8",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  presetRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  presetChip: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-  },
-  presetChipText: {
-    color: "#E2E8F0",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  cooldownSection: {
-    gap: 8,
-  },
-  cooldownLabelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  cooldownHint: {
-    color: "#64748B",
-    fontSize: 11,
-  },
-  cooldownRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  cooldownChip: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-  },
-  cooldownChipActive: {
-    backgroundColor: "rgba(56, 189, 248, 0.15)",
-    borderColor: "rgba(56, 189, 248, 0.4)",
-  },
-  cooldownChipText: {
-    color: "#94A3B8",
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  cooldownChipTextActive: {
-    color: "#38BDF8",
-    fontWeight: "700",
-  },
-  errorBox: {
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(239, 68, 68, 0.3)",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-  },
-  errorText: {
-    color: "#F87171",
-    fontSize: 12,
-    fontWeight: "500",
-    textAlign: "center",
-  },
-  successBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(16, 185, 129, 0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(16, 185, 129, 0.3)",
-    borderRadius: 12,
-    padding: 12,
-    gap: 8,
-    marginBottom: 8,
-  },
-  successText: {
-    color: "#10B981",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  duplicateWarningBox: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: "rgba(245, 158, 11, 0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(245, 158, 11, 0.35)",
-    borderRadius: 12,
-    padding: 10,
-    gap: 8,
-    marginTop: 8,
-  },
-  duplicateWarningContent: {
-    flex: 1,
-  },
-  duplicateWarningTitle: {
-    color: "#FBBF24",
-    fontSize: 12,
-    fontWeight: "700",
-    marginBottom: 2,
-  },
-  duplicateWarningText: {
-    color: "#FCD34D",
-    fontSize: 11,
-    lineHeight: 15,
-  },
-  rearmInfoBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(56, 189, 248, 0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(56, 189, 248, 0.3)",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    gap: 6,
-    marginTop: 8,
-  },
-  rearmInfoText: {
-    color: "#7DD3FC",
-    fontSize: 11,
-    fontWeight: "500",
-    flex: 1,
-  },
-  submitBtn: {
-    borderRadius: 16,
-    overflow: "hidden",
-    marginTop: 6,
-  },
-  submitBtnDisabled: {
-    opacity: 0.8,
-  },
-  submitGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 15,
-  },
-  btnContentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  submitBtnText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  /* List Styles */
-  emptyListContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 36,
-    paddingHorizontal: 20,
-    gap: 8,
-  },
-  emptyIconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
-  },
-  emptyTitle: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  emptySubtitle: {
-    color: "#64748B",
-    fontSize: 13,
-    textAlign: "center",
-    lineHeight: 18,
-  },
-  emptyActionBtn: {
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: "rgba(56, 189, 248, 0.12)",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(56, 189, 248, 0.3)",
-  },
-  emptyActionBtnText: {
-    color: "#38BDF8",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  alertItemCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-    padding: 14,
-    gap: 12,
-  },
-  alertItemHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  alertConditionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  alertDirectionIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  alertIconAbove: {
-    backgroundColor: "rgba(16, 185, 129, 0.15)",
-  },
-  alertIconBelow: {
-    backgroundColor: "rgba(244, 63, 94, 0.15)",
-  },
-  alertTargetText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  alertDiffText: {
-    color: "#94A3B8",
-    fontSize: 11,
-    marginTop: 2,
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 5,
-  },
-  statusBadgeArmed: {
-    backgroundColor: "rgba(16, 185, 129, 0.12)",
-  },
-  statusBadgeTriggered: {
-    backgroundColor: "rgba(245, 158, 11, 0.15)",
-  },
-  statusBadgeDisabled: {
-    backgroundColor: "rgba(148, 163, 184, 0.12)",
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusDotArmed: {
-    backgroundColor: "#10B981",
-  },
-  statusDotTriggered: {
-    backgroundColor: "#F59E0B",
-  },
-  statusDotDisabled: {
-    backgroundColor: "#94A3B8",
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  statusTextArmed: {
-    color: "#10B981",
-  },
-  statusTextTriggered: {
-    color: "#F59E0B",
-  },
-  statusTextDisabled: {
-    color: "#94A3B8",
-  },
-  alertItemFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.04)",
-    paddingTop: 10,
-  },
-  alertMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  alertMetaText: {
-    color: "#64748B",
-    fontSize: 11,
-  },
-  alertActionsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  rearmBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(56, 189, 248, 0.12)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  rearmBtnText: {
-    color: "#38BDF8",
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  deleteBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    backgroundColor: "rgba(244, 63, 94, 0.08)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
+const createStyles = (theme: ThemeType, isDark: boolean) =>
+  StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.7)",
+      justifyContent: "flex-end",
+    },
+    backdropPressable: {
+      flex: 1,
+    },
+    sheetContainer: {
+      backgroundColor: isDark ? "#0B0F19" : "#FFFFFF",
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "#E2E8F0",
+      paddingTop: 12,
+      paddingHorizontal: 20,
+      paddingBottom: Platform.OS === "ios" ? 40 : 24,
+      maxHeight: "88%",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: -3 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 10,
+      elevation: 16,
+    },
+    grabHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: isDark ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.15)",
+      alignSelf: "center",
+      marginBottom: 16,
+    },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 14,
+    },
+    headerLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    bellBadge: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: isDark ? "rgba(139, 92, 246, 0.15)" : "rgba(124, 58, 237, 0.1)",
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(139, 92, 246, 0.3)" : "rgba(124, 58, 237, 0.2)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    titleText: {
+      color: isDark ? "#FFFFFF" : "#0F172A",
+      fontSize: 18,
+      fontFamily: theme.fonts?.families?.openBold || "OpenSans_700Bold",
+      fontWeight: "700",
+      letterSpacing: -0.2,
+    },
+    subtitleText: {
+      color: isDark ? "#94A3B8" : "#64748B",
+      fontSize: 12,
+      fontFamily: theme.fonts?.families?.openRegular || "OpenSans_400Regular",
+      marginTop: 2,
+    },
+    closeBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: isDark ? "rgba(255, 255, 255, 0.06)" : "#F1F5F9",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modeTabsContainer: {
+      flexDirection: "row",
+      backgroundColor: isDark ? "rgba(255, 255, 255, 0.04)" : "#F1F5F9",
+      borderRadius: 12,
+      borderWidth: isDark ? 0 : 1,
+      borderColor: "#E2E8F0",
+      padding: 3,
+      marginBottom: 14,
+    },
+    modeTab: {
+      flex: 1,
+      paddingVertical: 9,
+      alignItems: "center",
+      borderRadius: 9,
+    },
+    modeTabActive: {
+      backgroundColor: isDark ? "rgba(255, 255, 255, 0.12)" : "#FFFFFF",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: isDark ? 0 : 0.08,
+      shadowRadius: 2,
+      elevation: isDark ? 0 : 2,
+    },
+    modeTabText: {
+      color: isDark ? "#94A3B8" : "#64748B",
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    modeTabTextActive: {
+      color: isDark ? "#FFFFFF" : theme.colors.primary,
+      fontWeight: "700",
+    },
+    tokenCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: isDark ? "rgba(255, 255, 255, 0.03)" : "#F8FAFC",
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255, 255, 255, 0.06)" : "#E2E8F0",
+      padding: 14,
+      marginBottom: 14,
+    },
+    tokenCardLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    tokenCardSymbol: {
+      color: isDark ? "#FFFFFF" : "#0F172A",
+      fontSize: 16,
+      fontWeight: "700",
+    },
+    tokenCardName: {
+      color: isDark ? "#94A3B8" : "#64748B",
+      fontSize: 12,
+      marginTop: 2,
+      maxWidth: 120,
+    },
+    tokenCardRight: {
+      alignItems: "flex-end",
+    },
+    livePriceLabel: {
+      color: isDark ? "#64748B" : "#94A3B8",
+      fontSize: 11,
+      fontWeight: "500",
+    },
+    livePriceValue: {
+      color: isDark ? "#FFFFFF" : "#0F172A",
+      fontSize: 17,
+      fontWeight: "700",
+      marginTop: 2,
+    },
+    scrollBody: {
+      gap: 14,
+      paddingBottom: 20,
+    },
+    directionToggleContainer: {
+      flexDirection: "row",
+      backgroundColor: isDark ? "rgba(255, 255, 255, 0.03)" : "#F1F5F9",
+      borderRadius: 14,
+      padding: 4,
+      gap: 6,
+    },
+    directionTab: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+      borderRadius: 10,
+      gap: 6,
+    },
+    directionTabActiveAbove: {
+      backgroundColor: isDark ? "rgba(16, 185, 129, 0.15)" : "rgba(16, 185, 129, 0.12)",
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(16, 185, 129, 0.35)" : "rgba(16, 185, 129, 0.3)",
+    },
+    directionTabActiveBelow: {
+      backgroundColor: isDark ? "rgba(244, 63, 94, 0.15)" : "rgba(244, 63, 94, 0.12)",
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(244, 63, 94, 0.35)" : "rgba(244, 63, 94, 0.3)",
+    },
+    directionTabText: {
+      color: isDark ? "#94A3B8" : "#64748B",
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    directionTabTextActiveAbove: {
+      color: isDark ? "#10B981" : "#059669",
+      fontWeight: "700",
+    },
+    directionTabTextActiveBelow: {
+      color: isDark ? "#F43F5E" : "#E11D48",
+      fontWeight: "700",
+    },
+    inputSection: {
+      gap: 8,
+    },
+    inputLabelRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    inputLabel: {
+      color: isDark ? "#E2E8F0" : "#1E293B",
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    pctBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+    },
+    pctBadgeText: {
+      fontSize: 11,
+      fontWeight: "700",
+    },
+    inputContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: isDark ? "rgba(255, 255, 255, 0.04)" : "#F8FAFC",
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255, 255, 255, 0.1)" : "#CBD5E1",
+      paddingHorizontal: 16,
+      height: 52,
+    },
+    currencyPrefix: {
+      color: isDark ? "#64748B" : "#94A3B8",
+      fontSize: 20,
+      fontWeight: "700",
+      marginRight: 6,
+    },
+    textInput: {
+      flex: 1,
+      color: isDark ? "#FFFFFF" : "#0F172A",
+      fontSize: 18,
+      fontWeight: "700",
+      padding: 0,
+    },
+    presetSection: {
+      gap: 8,
+    },
+    sectionSmallLabel: {
+      color: isDark ? "#94A3B8" : "#64748B",
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    presetRow: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    presetChip: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 8,
+      backgroundColor: isDark ? "rgba(255, 255, 255, 0.03)" : "#F8FAFC",
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "#E2E8F0",
+    },
+    presetChipText: {
+      color: isDark ? "#E2E8F0" : "#1E293B",
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    cooldownSection: {
+      gap: 8,
+    },
+    cooldownLabelRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    cooldownHint: {
+      color: isDark ? "#64748B" : "#94A3B8",
+      fontSize: 11,
+    },
+    cooldownRow: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    cooldownChip: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 8,
+      backgroundColor: isDark ? "rgba(255, 255, 255, 0.03)" : "#F8FAFC",
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "#E2E8F0",
+    },
+    cooldownChipActive: {
+      backgroundColor: isDark ? "rgba(139, 92, 246, 0.18)" : "rgba(124, 58, 237, 0.12)",
+      borderColor: isDark ? "rgba(139, 92, 246, 0.45)" : "rgba(124, 58, 237, 0.35)",
+    },
+    cooldownChipText: {
+      color: isDark ? "#94A3B8" : "#64748B",
+      fontSize: 11,
+      fontWeight: "600",
+    },
+    cooldownChipTextActive: {
+      color: isDark ? "#A78BFA" : "#7C3AED",
+      fontWeight: "700",
+    },
+    errorBox: {
+      backgroundColor: "rgba(239, 68, 68, 0.1)",
+      borderWidth: 1,
+      borderColor: "rgba(239, 68, 68, 0.3)",
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 8,
+    },
+    errorText: {
+      color: "#F87171",
+      fontSize: 12,
+      fontWeight: "500",
+      textAlign: "center",
+    },
+    successBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: isDark ? "rgba(16, 185, 129, 0.12)" : "rgba(16, 185, 129, 0.1)",
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(16, 185, 129, 0.3)" : "rgba(16, 185, 129, 0.25)",
+      borderRadius: 12,
+      padding: 12,
+      gap: 8,
+      marginBottom: 8,
+    },
+    successText: {
+      color: isDark ? "#10B981" : "#059669",
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    duplicateWarningBox: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      backgroundColor: isDark ? "rgba(245, 158, 11, 0.12)" : "rgba(245, 158, 11, 0.08)",
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(245, 158, 11, 0.35)" : "rgba(245, 158, 11, 0.25)",
+      borderRadius: 12,
+      padding: 10,
+      gap: 8,
+      marginTop: 8,
+    },
+    duplicateWarningContent: {
+      flex: 1,
+    },
+    duplicateWarningTitle: {
+      color: isDark ? "#FBBF24" : "#D97706",
+      fontSize: 12,
+      fontWeight: "700",
+      marginBottom: 2,
+    },
+    duplicateWarningText: {
+      color: isDark ? "#FCD34D" : "#B45309",
+      fontSize: 11,
+      lineHeight: 15,
+    },
+    rearmInfoBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: isDark ? "rgba(56, 189, 248, 0.1)" : "rgba(14, 165, 233, 0.08)",
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(56, 189, 248, 0.3)" : "rgba(14, 165, 233, 0.25)",
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      gap: 6,
+      marginTop: 8,
+    },
+    rearmInfoText: {
+      color: isDark ? "#7DD3FC" : "#0284C7",
+      fontSize: 11,
+      fontWeight: "500",
+      flex: 1,
+    },
+    submitBtn: {
+      borderRadius: 16,
+      overflow: "hidden",
+      marginTop: 6,
+    },
+    submitBtnDisabled: {
+      opacity: 0.8,
+    },
+    submitGradient: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 15,
+    },
+    btnContentRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    submitBtnText: {
+      color: "#FFFFFF",
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    /* List Styles */
+    emptyListContainer: {
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 36,
+      paddingHorizontal: 20,
+      gap: 8,
+    },
+    emptyIconCircle: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: isDark ? "rgba(255, 255, 255, 0.04)" : "#F1F5F9",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 6,
+    },
+    emptyTitle: {
+      color: isDark ? "#FFFFFF" : "#0F172A",
+      fontSize: 16,
+      fontWeight: "700",
+    },
+    emptySubtitle: {
+      color: isDark ? "#64748B" : "#64748B",
+      fontSize: 13,
+      textAlign: "center",
+      lineHeight: 18,
+    },
+    emptyActionBtn: {
+      marginTop: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      backgroundColor: isDark ? "rgba(139, 92, 246, 0.15)" : "rgba(124, 58, 237, 0.1)",
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(139, 92, 246, 0.35)" : "rgba(124, 58, 237, 0.25)",
+    },
+    emptyActionBtnText: {
+      color: theme.colors.primary,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    alertItemCard: {
+      backgroundColor: isDark ? "rgba(255, 255, 255, 0.03)" : "#F8FAFC",
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255, 255, 255, 0.06)" : "#E2E8F0",
+      padding: 14,
+      gap: 12,
+    },
+    alertItemHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    alertConditionRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    alertDirectionIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    alertIconAbove: {
+      backgroundColor: isDark ? "rgba(16, 185, 129, 0.15)" : "rgba(16, 185, 129, 0.12)",
+    },
+    alertIconBelow: {
+      backgroundColor: isDark ? "rgba(244, 63, 94, 0.15)" : "rgba(244, 63, 94, 0.12)",
+    },
+    alertTargetText: {
+      color: isDark ? "#FFFFFF" : "#0F172A",
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    alertDiffText: {
+      color: isDark ? "#94A3B8" : "#64748B",
+      fontSize: 11,
+      marginTop: 2,
+    },
+    statusBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+      gap: 5,
+    },
+    statusBadgeArmed: {
+      backgroundColor: isDark ? "rgba(16, 185, 129, 0.12)" : "rgba(16, 185, 129, 0.1)",
+    },
+    statusBadgeTriggered: {
+      backgroundColor: isDark ? "rgba(245, 158, 11, 0.15)" : "rgba(245, 158, 11, 0.12)",
+    },
+    statusBadgeDisabled: {
+      backgroundColor: isDark ? "rgba(148, 163, 184, 0.12)" : "rgba(148, 163, 184, 0.15)",
+    },
+    statusDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    statusDotArmed: {
+      backgroundColor: isDark ? "#10B981" : "#059669",
+    },
+    statusDotTriggered: {
+      backgroundColor: isDark ? "#F59E0B" : "#D97706",
+    },
+    statusDotDisabled: {
+      backgroundColor: isDark ? "#94A3B8" : "#64748B",
+    },
+    statusText: {
+      fontSize: 11,
+      fontWeight: "700",
+    },
+    statusTextArmed: {
+      color: isDark ? "#10B981" : "#059669",
+    },
+    statusTextTriggered: {
+      color: isDark ? "#F59E0B" : "#D97706",
+    },
+    statusTextDisabled: {
+      color: isDark ? "#94A3B8" : "#64748B",
+    },
+    alertItemFooter: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      borderTopWidth: 1,
+      borderTopColor: isDark ? "rgba(255, 255, 255, 0.04)" : "#E2E8F0",
+      paddingTop: 10,
+    },
+    alertMetaRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+    },
+    alertMetaText: {
+      color: isDark ? "#64748B" : "#94A3B8",
+      fontSize: 11,
+    },
+    alertActionsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    rearmBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: isDark ? "rgba(56, 189, 248, 0.12)" : "rgba(14, 165, 233, 0.1)",
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+    },
+    rearmBtnText: {
+      color: isDark ? "#38BDF8" : "#0284C7",
+      fontSize: 11,
+      fontWeight: "600",
+    },
+    deleteBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: 8,
+      backgroundColor: "rgba(244, 63, 94, 0.08)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+  });

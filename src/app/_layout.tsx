@@ -263,6 +263,7 @@ import {
 import { lockWallet, UNLOCK_TIMEOUT, BACKGROUND_LOCK_TIMEOUT, loadBiometricPreference, checkBiometricAvailability, checkPasswordSet } from "../store/biometricsSlice";
 import { store, persistor, RootState } from "../store";
 import { AppKitProvider } from "@reown/appkit-react-native";
+import { ThemeController } from "@reown/appkit-core-react-native";
 import { appKit } from "../config/AppKitConfig";
 import { DarkTheme, LightTheme } from "../styles/theme";
 import FloatingBackButton from "./FloatingBackButton";
@@ -372,7 +373,7 @@ function InnerApp() {
   const isDark = themeMode === "system" ? systemColorScheme !== "light" : themeMode !== "light";
   const activeTheme = isDark ? DarkTheme : LightTheme;
 
-  // Sync Redux themeMode to Native System & Appearance
+  // Sync Redux themeMode to Native System & Appearance + AppKit Wallet Modal
   useEffect(() => {
     // Persist the chosen mode into iOS/Android native storage (so next launch's native splash screen aligns)
     if (Platform.OS !== "web") {
@@ -383,7 +384,18 @@ function InnerApp() {
       // Immediately swap the root view background color to prevent white flashes during React Navigation transitions
       SystemUI.setBackgroundColorAsync(activeTheme.colors.background).catch(() => {});
     }
-  }, [themeMode, activeTheme]);
+
+    // Synchronize AppKit connect wallet modal theme dynamically
+    try {
+      const mode = isDark ? "dark" : "light";
+      ThemeController.setDefaultThemeMode(mode);
+      ThemeController.setThemeVariables({
+        accent: activeTheme.colors.primary,
+      });
+    } catch (e) {
+      console.warn("Failed to sync AppKit theme", e);
+    }
+  }, [themeMode, isDark, activeTheme]);
 
   return (
     <ThemeProvider theme={activeTheme} key={appKey}>

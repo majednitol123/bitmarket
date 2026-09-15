@@ -16,6 +16,7 @@ import { ThemeType } from "../../styles/theme";
 import { ROUTES } from "../../constants/routes";
 import { Alert, View } from "react-native";
 import { AppKit } from "@reown/appkit-react-native";
+import { ThemeController } from "@reown/appkit-core-react-native";
 import FloatingTabBar from "../../components/FloatingTabBar/FloatingTabBar";
 import { useRealtimeSubscription } from "../../hooks/useRealtimeSubscription";
 
@@ -51,6 +52,19 @@ export default function AppLayout() {
     SystemUI.setBackgroundColorAsync(theme.colors.background).catch(() => {});
     prepare();
   }, []);
+
+  // Sync AppKit theme with current theme
+  useEffect(() => {
+    try {
+      const isDark = (theme as any)?.colors?.cardBackground !== "#FFFFFF";
+      ThemeController.setDefaultThemeMode(isDark ? "dark" : "light");
+      ThemeController.setThemeVariables({
+        accent: (theme as any)?.colors?.primary,
+      });
+    } catch (e) {
+      console.warn("Failed to sync AppKit theme in (app)", e);
+    }
+  }, [theme]);
 
   // ─── REACTIVE LOCK NAVIGATION ───
   const isUnlocked = useSelector((state: RootState) => state.biometrics.unlocked);
