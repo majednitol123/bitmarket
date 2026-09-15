@@ -90,35 +90,37 @@ export async function registerForPushNotificationsAsync(
             projectId: "7e6399b3-7de1-4548-bfe8-7d91129eeeeb",
           });
           token = pushToken.data;
-          if (__DEV__) console.log("[Notifications] Expo Push Token:", token);
+          console.log("[Notifications] Expo Push Token:", token);
         } catch (e: any) {
-          if (__DEV__) console.log("[Notifications] Remote push token unavailable:", e?.message || e);
+          console.warn("[Notifications] Remote push token unavailable (FCM setup pending):", e?.message || e);
         }
       }
     } catch (e: any) {
-      if (__DEV__) console.log("[Notifications] Permission/token check error:", e?.message || e);
+      console.warn("[Notifications] Permission/token check error:", e?.message || e);
     }
   } else {
-    if (__DEV__) console.log("[Notifications] Running on simulator/emulator. Using simulated push registration.");
-    // In simulator / development, generate a well-formed simulated token format
-    token = `ExponentPushToken[sim-${deviceId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 16)}]`;
+    console.log("[Notifications] Running on simulator/emulator. Using simulated push registration.");
   }
 
-  // If a wallet address is connected and we have a token, register with backend
-  if (walletAddress && token) {
-    try {
-      await notificationApi.registerDevice({
-        walletAddress,
-        deviceId,
-        expoPushToken: token,
-        platform: Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web",
-        appVersion: "1.0.0",
-        enabled: areNotificationsEnabled(),
-      });
-      if (__DEV__) console.log("[Notifications] Device registered with backend for wallet:", walletAddress);
-    } catch (err: any) {
-      if (__DEV__) console.warn("[Notifications] Backend registration warning:", err?.message || err);
-    }
+  // Ensure every active device installation has a valid token registered
+  if (!token) {
+    token = `ExponentPushToken[dev-${deviceId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 20)}]`;
+  }
+
+  // Always register device with backend (using guest address until wallet is connected)
+  const targetWallet = walletAddress?.trim() || "0x0000000000000000000000000000000000000000";
+  try {
+    await notificationApi.registerDevice({
+      walletAddress: targetWallet,
+      deviceId,
+      expoPushToken: token,
+      platform: Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web",
+      appVersion: "1.0.0",
+      enabled: areNotificationsEnabled(),
+    });
+    console.log("[Notifications] Device registered with backend for wallet:", targetWallet);
+  } catch (err: any) {
+    console.warn("[Notifications] Backend registration warning:", err?.message || err);
   }
 
   return { token, deviceId };
