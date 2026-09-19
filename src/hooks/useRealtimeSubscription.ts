@@ -47,16 +47,18 @@ export function useRealtimeSubscription() {
       }
 
       if (msg.eventType === 'reconnected') {
-        // Post-reconnect synchronization (Section 39)
-        dispatch(fetchMarketOverview({ forceRefresh: false }));
-        dispatch(
-          fetchMarketTokens({
-            category: selectedCategoryRef.current,
-            page: 1,
-            limit: 50,
-            forceRefresh: false,
-          })
-        );
+        // Post-reconnect synchronization ONLY if market topics are actively subscribed
+        if (realtimeService.isSubscribedTo('market:tokens') || realtimeService.isSubscribedTo('market:overview')) {
+          dispatch(fetchMarketOverview({ forceRefresh: false }));
+          dispatch(
+            fetchMarketTokens({
+              category: selectedCategoryRef.current,
+              page: 1,
+              limit: 50,
+              forceRefresh: false,
+            })
+          );
+        }
         return;
       }
 

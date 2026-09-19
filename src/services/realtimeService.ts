@@ -42,6 +42,7 @@ class RealtimeService {
   private subscribedResources = new Set<RealtimeResource>(['system']);
   private activeWalletAddress: string | null = null;
   private isConnected = false;
+  private clientId = `client-${Math.random().toString(36).slice(2, 10)}`;
 
   constructor() {
     // Singleton
@@ -64,7 +65,10 @@ class RealtimeService {
       this.activeWalletAddress = walletAddress;
     }
 
-    const url = getWebSocketUrl();
+    const baseUrl = getWebSocketUrl();
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    const url = `${baseUrl}${separator}clientId=${this.clientId}`;
+
     try {
       this.ws = new WebSocket(url);
 
@@ -114,12 +118,17 @@ class RealtimeService {
         }
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (event: any) => {
         this.isConnected = false;
         this.notifyConnectionState(false);
-        if (!this.isExplicitlyClosed) {
-          this.scheduleReconnect();
+        const code = event?.code;
+        // Code 4001: Superseded by another connection
+        // Code 1000: Normal clean closure
+        if (code === 4001 || code === 1000 || this.isExplicitlyClosed) {
+          console.log(`[RealtimeService] Socket closed cleanly (code: ${code}). Halting reconnect.`);
+          return;
         }
+        this.scheduleReconnect();
       };
 
       this.ws.onerror = (err) => {
@@ -273,6 +282,13 @@ class RealtimeService {
    */
   public getIsConnected(): boolean {
     return this.isConnected;
+  }
+
+  /**
+   * Checks whether this client is currently subscribed to a specific resource
+   */
+  public isSubscribedTo(resource: RealtimeResource): boolean {
+    return this.subscribedResources.has(resource);
   }
 
   /**

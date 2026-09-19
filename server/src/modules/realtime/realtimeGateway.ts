@@ -13,6 +13,7 @@ import {
 
 interface ClientSession {
   id: string;
+  clientId?: string;
   ws: WebSocket;
   ip: string;
   isAlive: boolean;
@@ -86,12 +87,19 @@ export class RealtimeGateway {
     const socketId = `ws-${crypto.randomUUID().slice(0, 8)}`;
     const ip = req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || 'unknown';
 
-    // Prune existing duplicate connections from the same client IP (eliminates Fast Refresh zombies)
-    if (ip !== 'unknown' && ip !== '127.0.0.1' && ip !== '::1') {
+    // Parse clientId from query string if provided
+    let clientId: string | undefined;
+    try {
+      const reqUrl = new URL(req.url || '', 'http://localhost');
+      clientId = reqUrl.searchParams.get('clientId') || undefined;
+    } catch {}
+
+    // Prune existing duplicate connection from the exact same clientId
+    if (clientId) {
       this.wsClients.forEach((existingSession, existingId) => {
-        if (existingSession.ip === ip) {
+        if (existingSession.clientId === clientId) {
           try {
-            existingSession.ws.close(4001, 'Superseded by newer connection from same client');
+            existingSession.ws.close(4001, 'Superseded by newer connection');
           } catch {}
           this.wsClients.delete(existingId);
         }
@@ -103,6 +111,7 @@ export class RealtimeGateway {
 
     const session: ClientSession = {
       id: socketId,
+      clientId,
       ws,
       ip,
       isAlive: true,
