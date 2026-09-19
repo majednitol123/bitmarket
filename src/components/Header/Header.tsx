@@ -1,11 +1,11 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import { useTheme } from "styled-components/native";
 import { ThemeType } from "../../styles/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, router } from "expo-router";
-import { MenuIcon, ChevronDownIcon, ChevronLeftIcon, PortfolioIcon } from "../Icons/AppIcons";
+import { MenuIcon, ChevronDownIcon, ChevronLeftIcon, PortfolioIcon, RefreshCwIcon } from "../Icons/AppIcons";
 import { ROUTES } from "../../constants/routes";
 import { useAppKit, useAccount } from "@reown/appkit-react-native";
 
@@ -17,6 +17,8 @@ export interface HeaderProps {
   showBack?: boolean;
   onBack?: () => void;
   rightAction?: "network" | "connect" | "none";
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -27,6 +29,8 @@ const Header: React.FC<HeaderProps> = ({
   showBack,
   onBack,
   rightAction = "connect",
+  onRefresh,
+  isRefreshing = false,
 }) => {
   const theme = useTheme() as ThemeType;
   const insets = useSafeAreaInsets();
@@ -186,6 +190,27 @@ const Header: React.FC<HeaderProps> = ({
               </TouchableOpacity>
             )
           ) : null}
+
+          {onRefresh && (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={onRefresh}
+              disabled={isRefreshing}
+              style={[
+                styles.refreshBtn,
+                {
+                  backgroundColor: theme.colors.cardBackground,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              {isRefreshing ? (
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+              ) : (
+                <RefreshCwIcon size={15} color={theme.colors.white} strokeWidth={2.2} />
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </LinearGradient>
@@ -194,28 +219,26 @@ const Header: React.FC<HeaderProps> = ({
 
 const styles = StyleSheet.create({
   headerContainer: {
-    width: "100%",
-    zIndex: 10,
-    paddingBottom: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
   contentRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
+    justifyContent: "space-between",
   },
   leftGroup: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
   },
   drawerButton: {
     width: 40,
     height: 40,
     borderRadius: 12,
     borderWidth: 1,
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
   },
   brandContainer: {
     flexDirection: "row",
@@ -226,12 +249,12 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
   },
   logoBadgeText: {
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "900",
   },
   brandTitle: {
@@ -242,6 +265,15 @@ const styles = StyleSheet.create({
   rightGroup: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  refreshBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
   },
   networkPill: {
     flexDirection: "row",

@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useTheme } from "styled-components/native";
 import { useSafeAreaInsets, EdgeInsets } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAccount, useAppKit } from "@reown/appkit-react-native";
 import { useDispatch, useSelector } from "react-redux";
@@ -21,6 +21,7 @@ import type { ThemeType } from "../../styles/theme";
 import type { RootState, AppDispatch } from "../../store";
 import { SafeAreaContainer } from "../../components/Styles/Layout.styles";
 import Header from "../../components/Header/Header";
+import { realtimeService } from "../../services/realtimeService";
 import { BlockchainIcon } from "../../components/BlockchainIcon/BlockchainIcon";
 import { ChainSelectorModal } from "../../components/ChainSelectorModal/ChainSelectorModal";
 import { CHAINS, type Chain } from "../../constants/tokenRegistry";
@@ -34,6 +35,7 @@ import {
   CoinsIcon,
   YieldIcon,
   HistoryIcon,
+  RefreshCwIcon,
 } from "../../components/Icons/AppIcons";
 import { getChainExplorerTxUrl } from "../../utils/chainMapping";
 
@@ -83,6 +85,9 @@ export default function PortfolioScreen() {
   // Debug override address from Settings → Developer Tools
   const debugOverrideAddress = useSelector(
     (state: RootState) => state.settings?.debugOverrideAddress ?? ""
+  );
+  const dataUpdateInterval = useSelector(
+    (state: RootState) => state.settings?.dataUpdateInterval ?? 15
   );
 
   const activeAddress = debugOverrideAddress || appKitAddress || internalAddress || null;
@@ -134,6 +139,13 @@ export default function PortfolioScreen() {
     return () => subscription.remove();
   }, [dispatch, activeAddress, selectedChainState.id, reduxTimeframe]);
 
+  useFocusEffect(
+    useCallback(() => {
+      // Proactively unsubscribe from market topics whenever Portfolio screen is focused
+      realtimeService.unsubscribe(['market:tokens', 'market:overview']);
+    }, [])
+  );
+
   const onRefresh = useCallback(async () => {
     if (activeAddress) {
       await dispatch(refreshPortfolio({ chain: selectedChainState.id, address: activeAddress }));
@@ -181,7 +193,26 @@ export default function PortfolioScreen() {
     setSelectedChainState(chain);
     dispatch(setSelectedChain(chain.id));
     setChainModalVisible(false);
+
+    // 2. Immediately fetch fresh on-chain portfolio data for the newly selected network
+    if (activeAddress) {
+      dispatch(fetchPortfolio({ chain: chain.id, address: activeAddress, forceRefresh: true }));
+      dispatch(fetchPortfolioChart({ chain: chain.id, address: activeAddress, range: reduxTimeframe }));
+      dispatch(fetchPortfolioTransactions({ chain: chain.id, address: activeAddress, page: 1, limit: 20 }));
+      dispatch(fetchSwapHistory({ chain: chain.id, address: activeAddress, page: 1, limit: 20 }));
+    }
   };
+
+  // Sync chain automatically if internal wallet activeChainId changes
+  const internalChainId = useSelector((state: RootState) => state.ethereum?.activeChainId);
+  useEffect(() => {
+    if (internalChainId) {
+      const match = CHAINS.find((c) => String(c.id) === String(internalChainId));
+      if (match && match.id !== selectedChainState.id) {
+        handleSelectChain(match);
+      }
+    }
+  }, [internalChainId, selectedChainState.id]);
 
   const handleSelectTimeframe = (tf: Timeframe) => {
     dispatch(setSelectedTimeframe(tf));
@@ -263,6 +294,8 @@ export default function PortfolioScreen() {
         rightAction="network"
         currentChainName={selectedChainState.name}
         onOpenChainModal={() => setChainModalVisible(true)}
+        onRefresh={onRefresh}
+        isRefreshing={isRefreshing}
       />
 
       <ScrollView
@@ -319,7 +352,24 @@ export default function PortfolioScreen() {
         <View style={styles.heroCard}>
           <View style={styles.heroTopRow}>
             <View style={styles.heroBalanceContainer}>
-              <Text style={styles.heroLabel}>{displayLabel}</Text>
+              <View style={styles.heroLabelRow}>
+                <Text style={styles.heroLabel}>{displayLabel}</Text>
+                <TouchableOpacity
+                  style={styles.heroRefreshBtn}
+                  onPress={onRefresh}
+                  disabled={isRefreshing}
+                  activeOpacity={0.7}
+                >
+                  {isRefreshing ? (
+                    <ActivityIndicator size={11} color={theme.colors.primary} />
+                  ) : (
+                    <>
+                      <RefreshCwIcon size={11} color={theme.colors.primary} strokeWidth={2.4} />
+                      <Text style={styles.heroRefreshText}>Refresh</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
               <Text
                 style={styles.heroBalance}
                 numberOfLines={1}
@@ -782,6 +832,27 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       color: theme.colors.grey,
       fontSize: 12,
       fontWeight: "500",
+    },
+    heroLabelRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    heroRefreshBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "rgba(124, 58, 237, 0.12)",
+      borderColor: "rgba(124, 58, 237, 0.3)",
+      borderWidth: 1,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+      gap: 4,
+    },
+    heroRefreshText: {
+      color: theme.colors.primary,
+      fontSize: 11,
+      fontWeight: "700",
     },
     heroBalance: {
       color: theme.colors.white,

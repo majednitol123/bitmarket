@@ -14,7 +14,8 @@ export type RealtimeEventType =
   | 'swap_failed'
   | 'heartbeat'
   | 'subscribed'
-  | 'unsubscribed';
+  | 'unsubscribed'
+  | 'interval_updated';
 
 export interface RealtimeMessage {
   resource: RealtimeResource;
@@ -26,16 +27,24 @@ export interface RealtimeMessage {
 }
 
 export interface ClientInboundMessage {
-  action: 'subscribe' | 'unsubscribe' | 'ping';
+  action: 'subscribe' | 'unsubscribe' | 'ping' | 'set_interval' | 'market_ping';
   resources?: RealtimeResource[];
   walletAddress?: string;
+  intervalSeconds?: number;
 }
 
 export interface RealtimeGatewayStats {
   instanceId: string;
   activeWebSocketConnections: number;
+  activeMarketSubscribers: number;
   activeSseConnections: number;
   totalMessagesBroadcast: number;
   snapshotVersions: Record<string, number>;
   uptimeSeconds: number;
+  clients?: Array<{
+    id: string;
+    ip: string;
+    subscriptions: RealtimeResource[];
+    walletAddress?: string;
+  }>;
 }

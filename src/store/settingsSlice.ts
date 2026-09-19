@@ -2,6 +2,8 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 export type ThemeMode = "light" | "dark" | "system";
 
+export type DataUpdateInterval = 5 | 10 | 15 | 30 | 60;
+
 export interface SettingsState {
   themeMode: ThemeMode;
   slippage: string;
@@ -11,6 +13,7 @@ export interface SettingsState {
   expertMode: boolean;
   notificationsEnabled: boolean;
   debugOverrideAddress: string;
+  dataUpdateInterval: number;
 }
 
 const initialState: SettingsState = {
@@ -22,6 +25,7 @@ const initialState: SettingsState = {
   expertMode: false,
   notificationsEnabled: true,
   debugOverrideAddress: "",
+  dataUpdateInterval: 15,
 };
 
 const settingsSlice = createSlice({
@@ -52,6 +56,9 @@ const settingsSlice = createSlice({
     setDebugOverrideAddress(state, action: PayloadAction<string>) {
       state.debugOverrideAddress = action.payload.trim();
     },
+    setDataUpdateInterval(state, action: PayloadAction<number>) {
+      state.dataUpdateInterval = action.payload;
+    },
   },
 });
 
@@ -64,6 +71,7 @@ export const {
   setExpertMode,
   setNotificationsEnabled,
   setDebugOverrideAddress,
+  setDataUpdateInterval,
 } = settingsSlice.actions;
 
 export default settingsSlice.reducer;

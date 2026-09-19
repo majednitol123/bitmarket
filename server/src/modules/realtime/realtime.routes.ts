@@ -30,6 +30,15 @@ router.get('/stats', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/realtime/reset
+ * Disconnects existing WebSocket connections and forces them to reconnect with default topics
+ */
+router.post('/reset', (_req: Request, res: Response) => {
+  realtimeGateway.disconnectAllClients();
+  res.json({ success: true, message: 'All clients disconnected and forced to reconnect fresh' });
+});
+
+/**
  * POST /api/realtime/publish-test
  * Trigger a real-time message through the multi-instance Redis Pub/Sub engine
  */

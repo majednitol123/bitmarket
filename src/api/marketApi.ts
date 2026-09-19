@@ -128,4 +128,14 @@ export const marketApi = {
     });
     return res.data.data || [];
   },
+
+  async getUpdateInterval(): Promise<number> {
+    const res = await marketApiClient.get('/api/market/interval');
+    return res.data.data?.intervalSeconds || 5;
+  },
+
+  async setUpdateInterval(intervalSeconds: number): Promise<number> {
+    const res = await marketApiClient.post('/api/market/interval', { intervalSeconds });
+    return res.data.data?.intervalSeconds || intervalSeconds;
+  },
 };

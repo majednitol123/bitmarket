@@ -8,7 +8,7 @@ import {
   RouteType,
   UnsignedTransaction,
 } from './exchange.types';
-import { coinStatsProvider } from '../../providers/CoinStatsProvider';
+import { coinMarketCapProvider } from '../../providers/CoinMarketCapProvider';
 
 const LIFI_BASE_URL = 'https://li.quest/v1';
 
@@ -251,8 +251,8 @@ export class ExchangeProvider extends BaseProvider {
         rawQuote: quote,
       };
     } catch (err: any) {
-      console.warn(`[ExchangeProvider] Li.Fi quote error: ${err.message}. Engaging CoinStats fallback pricing...`);
-      return this.getCoinStatsFallbackQuote(params, fromChainId, toChainId, isBridge);
+      console.warn(`[ExchangeProvider] Li.Fi quote error: ${err.message}. Engaging CoinMarketCap fallback pricing...`);
+      return this.getCmcFallbackQuote(params, fromChainId, toChainId, isBridge);
     }
   }
 
@@ -347,9 +347,9 @@ export class ExchangeProvider extends BaseProvider {
   }
 
   /**
-   * Safe fallback quote using live CoinStats market token prices if external DEX API is unreachable
+   * Safe fallback quote using live CoinMarketCap token prices if external DEX API is unreachable
    */
-  private async getCoinStatsFallbackQuote(
+  private async getCmcFallbackQuote(
     params: ExchangeQuoteRequest,
     fromChainId: number,
     toChainId: number,
@@ -359,7 +359,7 @@ export class ExchangeProvider extends BaseProvider {
     let toPrice = 1.0; // default stablecoin estimate
 
     try {
-      const overview = await coinStatsProvider.getCoins({ page: 1, limit: 100 });
+      const overview = await coinMarketCapProvider.getCoins({ page: 1, limit: 100 });
       const fromCoin = overview.tokens.find(
         (c: any) =>
           c.symbol?.toLowerCase() === params.fromToken?.toLowerCase() ||

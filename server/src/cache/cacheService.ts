@@ -10,6 +10,7 @@ import {
 
 export class CacheService {
   private memoryCache: Map<string, CacheEnvelope<any>> = new Map();
+  private evergreenFallbackCache: Map<string, CacheEnvelope<any>> = new Map();
   private inFlightPromises: Map<string, Promise<any>> = new Map();
   private maxMemoryEntries: number = 1000;
 
@@ -41,8 +42,9 @@ export class CacheService {
         if (raw) {
           const parsed = JSON.parse(raw) as CacheEnvelope<T>;
           if (parsed && typeof parsed.freshUntil === 'number') {
-            // Update local memory copy
+            // Update local memory copy and evergreen fallback
             this.setToMemory(key, parsed);
+            this.evergreenFallbackCache.set(key, parsed);
             return parsed;
           }
         }
@@ -54,12 +56,6 @@ export class CacheService {
     // Memory cache lookup
     const memEntry = this.memoryCache.get(key);
     if (!memEntry) return null;
-
-    // Discard if hard expired past staleUntil
-    if (Date.now() > memEntry.staleUntil) {
-      this.memoryCache.delete(key);
-      return null;
-    }
 
     return memEntry as CacheEnvelope<T>;
   }
@@ -75,7 +71,7 @@ export class CacheService {
   ): Promise<CacheEnvelope<T>> {
     const now = Date.now();
     const freshSeconds = ttlConfig.freshSeconds;
-    const staleSeconds = ttlConfig.staleSeconds ?? Math.max(freshSeconds * 3, 60);
+    const staleSeconds = ttlConfig.staleSeconds ?? Math.max(freshSeconds * 30, 3600);
 
     const freshUntil = now + freshSeconds * 1000;
     const staleUntil = now + (freshSeconds + staleSeconds) * 1000;
@@ -91,8 +87,9 @@ export class CacheService {
       version: (existing?.version || 0) + 1,
     };
 
-    // Update memory
+    // Update memory & evergreen fallback
     this.setToMemory(key, envelope);
+    this.evergreenFallbackCache.set(key, envelope);
 
     // Update Redis with hard expiration (fresh + stale window + 60s safety margin)
     const client = getRedisClient();
@@ -125,8 +122,8 @@ export class CacheService {
   ): Promise<T> {
     const ttlConfig: CacheTtlConfig =
       typeof ttl === 'number'
-        ? { freshSeconds: ttl, staleSeconds: Math.max(ttl * 3, 60) }
-        : { freshSeconds: ttl.freshSeconds, staleSeconds: ttl.staleSeconds ?? Math.max(ttl.freshSeconds * 3, 60) };
+        ? { freshSeconds: ttl, staleSeconds: Math.max(ttl * 30, 3600) }
+        : { freshSeconds: ttl.freshSeconds, staleSeconds: ttl.staleSeconds ?? Math.max(ttl.freshSeconds * 30, 3600) };
 
     const now = Date.now();
 
@@ -189,8 +186,8 @@ export class CacheService {
         await this.writeEnvelope(key, freshData, ttlConfig, options.source || 'upstream');
         return freshData;
       } catch (err: any) {
-        // Provider failed: Check if a stale envelope exists in cache to serve as fallback
-        const staleEnvelope = await this.readEnvelope<T>(key);
+        // Provider failed: Check if a stale or evergreen envelope exists in cache to serve as fallback
+        const staleEnvelope = (await this.readEnvelope<T>(key)) || (this.evergreenFallbackCache.get(key) as CacheEnvelope<T> | undefined);
         if (staleEnvelope && staleEnvelope.value !== null && staleEnvelope.value !== undefined) {
           this.metrics.fallbackServes++;
           console.warn(
@@ -285,6 +282,7 @@ export class CacheService {
    */
   public async delete(key: string): Promise<void> {
     this.memoryCache.delete(key);
+    this.evergreenFallbackCache.delete(key);
     const client = getRedisClient();
     if (client && isRedisConnected()) {
       try {
@@ -301,12 +299,17 @@ export class CacheService {
   public async invalidatePattern(pattern: string): Promise<number> {
     let deletedCount = 0;
 
-    // 1. Purge from memory cache
+    // 1. Purge from memory cache and evergreen fallback
     const regexPattern = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
     for (const k of Array.from(this.memoryCache.keys())) {
       if (regexPattern.test(k)) {
         this.memoryCache.delete(k);
         deletedCount++;
+      }
+    }
+    for (const k of Array.from(this.evergreenFallbackCache.keys())) {
+      if (regexPattern.test(k)) {
+        this.evergreenFallbackCache.delete(k);
       }
     }
 

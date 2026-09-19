@@ -1,18 +1,16 @@
 import { marketService } from './market.service';
-import { isRedisConnected } from '../../config/redis';
+import { getRedisClient, isRedisConnected } from '../../config/redis';
 import { realtimePubSub } from '../realtime/realtimePubSub';
+import { coinMarketCapProvider } from '../../providers/CoinMarketCapProvider';
+import { marketDemandTracker } from './marketDemand';
+import { config } from '../../config/env';
 
-/**
- * Market Proactive Cache Warmer
- * Periodically refreshes shared market overview and top 250 master tokens
- * to guarantee instantaneous (<2ms) response times for mobile users.
- * Adheres to Section 10 and 53 of plan.md.
- */
-
+const REDIS_INTERVAL_KEY = 'market:refresh_interval_seconds';
+let currentIntervalSeconds = Math.max(5, Math.min(60, config.marketRefreshInterval || 5));
 let refreshIntervalTimer: NodeJS.Timeout | null = null;
 let isRunning: boolean = false;
-
-const REFRESH_INTERVAL_MS = 60 * 1000; // Every 60 seconds
+let lastIdleLogTimestamp = 0;
+let hadPreviousDemand = false;
 
 async function runProactiveCycle(): Promise<void> {
   if (isRunning) return;
@@ -21,58 +19,126 @@ async function runProactiveCycle(): Promise<void> {
     return;
   }
 
+  // Demand-driven gate: Only call external APIs when users are actively showing/viewing market data
+  const hasDemand = await marketDemandTracker.hasActiveDemand();
+  if (!hasDemand) {
+    if (hadPreviousDemand || Date.now() - lastIdleLogTimestamp > 30000) {
+      lastIdleLogTimestamp = Date.now();
+      hadPreviousDemand = false;
+      console.log('[MarketProactive] Idle: 0 active market viewers. Skipping upstream API calls to conserve limits.');
+    }
+    return;
+  }
+  hadPreviousDemand = true;
+
+  // If upstream CMC circuit is OPEN, pause proactive calls to allow cooldown
+  if (coinMarketCapProvider.getCircuitState() === 'OPEN') {
+    return;
+  }
+
+  // Yield to interactive user requests if outbound rate limit capacity is constrained
+  if (!coinMarketCapProvider.hasOutboundCapacity(3)) {
+    console.log('[MarketProactive] Outbound capacity near limit; yielding cycle to user traffic.');
+    return;
+  }
+
   isRunning = true;
   const start = Date.now();
 
   try {
-    // Refresh market overview and master tokens in parallel
-    const [overview, masterTokens] = await Promise.allSettled([
-      marketService.getOverview(false),
-      marketService.getMasterTokenList(false),
-    ]);
+    // Refresh market overview, then tokens with 150ms stagger to prevent burst collisions
+    const overview = await marketService.getOverview(true);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const masterTokens = await marketService.getMasterTokenList(true);
 
-    const overviewSuccess = overview.status === 'fulfilled';
-    const tokensSuccess = masterTokens.status === 'fulfilled';
     const duration = Date.now() - start;
+    const tokenCount = masterTokens?.length || 0;
 
-    if (overviewSuccess && tokensSuccess) {
-      const tokenCount = (masterTokens as PromiseFulfilledResult<any>).value?.length || 0;
-      console.log(
-        `[MarketProactive] Cache warmed successfully in ${duration}ms (Overview + ${tokenCount} master tokens)`
-      );
+    console.log(
+      `[MarketProactive] Cache warmed successfully in ${duration}ms (Overview + ${tokenCount} master tokens)`
+    );
 
-      // Section 38: Broadcast lightweight snapshot update signals to all gateways
-      await Promise.allSettled([
-        realtimePubSub.publish('market:tokens', 'snapshot_updated', {
-          tokenCount,
-          durationMs: duration,
-        }),
-        realtimePubSub.publish('market:overview', 'snapshot_updated', {
-          durationMs: duration,
-        }),
-      ]);
-    } else {
-      console.warn(
-        `[MarketProactive] Partial warming completed in ${duration}ms (Overview: ${overview.status}, Tokens: ${masterTokens.status})`
-      );
-    }
+    // Section 38: Broadcast lightweight snapshot update signals to all gateways
+    await Promise.allSettled([
+      realtimePubSub.publish('market:tokens', 'snapshot_updated', {
+        tokenCount,
+        durationMs: duration,
+      }),
+      realtimePubSub.publish('market:overview', 'snapshot_updated', {
+        durationMs: duration,
+      }),
+    ]);
   } catch (err: any) {
-    console.error(`[MarketProactive] Error warming market cache:`, err.message);
+    console.warn(`[MarketProactive] Cycle completed with fallback or notice:`, err.message);
   } finally {
     isRunning = false;
   }
 }
 
 /**
+ * Gets currently active proactive refresh interval in seconds
+ */
+export function getProactiveRefreshInterval(): number {
+  return currentIntervalSeconds;
+}
+
+/**
+ * Dynamically updates proactive refresh interval in seconds (5s to 60s)
+ * Automatically reschedules background timer and syncs across cluster via Redis
+ */
+export async function setProactiveRefreshInterval(seconds: number): Promise<number> {
+  const bounded = Math.max(5, Math.min(60, Math.floor(seconds)));
+  if (bounded === currentIntervalSeconds && refreshIntervalTimer) {
+    return currentIntervalSeconds;
+  }
+
+  const oldSeconds = currentIntervalSeconds;
+  currentIntervalSeconds = bounded;
+
+  // Persist in Redis so all instances and restarts remember it
+  const client = getRedisClient();
+  if (client && isRedisConnected()) {
+    client.set(REDIS_INTERVAL_KEY, String(bounded)).catch(() => {});
+  }
+
+  // Reschedule timer immediately with the new interval
+  if (refreshIntervalTimer) {
+    clearInterval(refreshIntervalTimer);
+    refreshIntervalTimer = setInterval(() => {
+      runProactiveCycle().catch((err) => {
+        console.error('[MarketProactive] Recurring warming cycle error:', err.message);
+      });
+    }, currentIntervalSeconds * 1000);
+  }
+
+  console.log(`[MarketProactive] Cache warmer interval updated: ${oldSeconds}s -> ${bounded}s`);
+  return currentIntervalSeconds;
+}
+
+/**
  * Start proactive cache warming worker
  */
-export function startMarketProactiveRefresher(): void {
+export async function startMarketProactiveRefresher(): Promise<void> {
   if (refreshIntervalTimer) {
     console.log('[MarketProactive] Warmer already running');
     return;
   }
 
-  console.log(`[MarketProactive] Starting proactive cache warmer (interval: ${REFRESH_INTERVAL_MS / 1000}s)`);
+  // Load saved interval from Redis if available
+  const client = getRedisClient();
+  if (client && isRedisConnected()) {
+    try {
+      const saved = await client.get(REDIS_INTERVAL_KEY);
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (parsed >= 5 && parsed <= 60) {
+          currentIntervalSeconds = parsed;
+        }
+      }
+    } catch {}
+  }
+
+  console.log(`[MarketProactive] Starting proactive cache warmer (interval: ${currentIntervalSeconds}s)`);
 
   // Run initial cycle after 3s delay to allow full startup
   setTimeout(() => {
@@ -86,7 +152,7 @@ export function startMarketProactiveRefresher(): void {
     runProactiveCycle().catch((err) => {
       console.error('[MarketProactive] Recurring warming cycle error:', err.message);
     });
-  }, REFRESH_INTERVAL_MS);
+  }, currentIntervalSeconds * 1000);
 }
 
 /**

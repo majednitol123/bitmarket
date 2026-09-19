@@ -185,7 +185,9 @@ export const marketSlice = createSlice({
         if (action.meta.arg?.append) {
           state.isLoadingMore = true;
         } else {
-          state.tokensStatus = GeneralStatus.Loading;
+          if (state.tokens.length === 0) {
+            state.tokensStatus = GeneralStatus.Loading;
+          }
           state.isLoadingMore = false;
         }
       })

@@ -5,24 +5,10 @@ import {
   ProviderRateLimitError,
   ProviderError,
 } from './core/ProviderErrors';
-import { MarketDataProvider } from './MarketDataProvider';
 import { PortfolioDataProvider } from './PortfolioDataProvider';
-import {
-  MarketOverview,
-  MarketToken,
-  ChartResponse,
-  CoinListOptions,
-  PaginatedTokens,
-} from '../modules/market/market.types';
-import {
-  mapCoinStatsOverview,
-  mapCoinStatsCoin,
-  mapCoinStatsCoinList,
-  mapCoinStatsChart,
-} from '../modules/market/market.mapper';
 import { config } from '../config/env';
 
-export class CoinStatsProvider extends BaseProvider implements MarketDataProvider, PortfolioDataProvider {
+export class CoinStatsProvider extends BaseProvider implements PortfolioDataProvider {
   private clients: AxiosInstance[];
   private activeKeyIndex: number = 0;
   private apiKeys: string[];
@@ -64,9 +50,26 @@ export class CoinStatsProvider extends BaseProvider implements MarketDataProvide
     }
   }
 
+  private keyCooldowns: Map<number, number> = new Map();
+  private lastRequestTimestamp: number = 0;
+  private minInterRequestDelayMs: number = 120; // 120ms inter-request spacing eliminates burst 429s
+
   /**
-   * Execute request with immediate key rotation upon receiving 429/406 quota exhaustion.
-   * Never sleep-retries the exhausted key.
+   * Enforces a minimum delay between consecutive outbound requests to CoinStats
+   * to eliminate concurrency burst rate limiting.
+   */
+  private async throttle(): Promise<void> {
+    const now = Date.now();
+    const elapsed = now - this.lastRequestTimestamp;
+    if (elapsed < this.minInterRequestDelayMs) {
+      await new Promise((resolve) => setTimeout(resolve, this.minInterRequestDelayMs - elapsed));
+    }
+    this.lastRequestTimestamp = Date.now();
+  }
+
+  /**
+   * Execute request with intelligent key quarantine, anti-burst pacing, and rotation.
+   * Quarantines 406 keys for 24h, 429 keys for 60s, and skips dead keys immediately.
    */
   private async requestWithRotation<T>(
     operationName: string,
@@ -77,34 +80,60 @@ export class CoinStatsProvider extends BaseProvider implements MarketDataProvide
       throw new ProviderAuthError('CoinStats', 'No CoinStats API keys configured');
     }
 
+    const now = Date.now();
+    // 1. Gather all healthy keys not under active quarantine
+    const candidates: number[] = [];
+    for (let i = 0; i < totalKeys; i++) {
+      const keyIdx = (this.activeKeyIndex + i) % totalKeys;
+      const cooldownUntil = this.keyCooldowns.get(keyIdx) || 0;
+      if (now >= cooldownUntil) {
+        candidates.push(keyIdx);
+      }
+    }
+
+    // If all keys are quarantined, check if any will unquarantine within 3 seconds
+    if (candidates.length === 0) {
+      let earliestIdx = 0;
+      let minCooldown = Infinity;
+      for (let i = 0; i < totalKeys; i++) {
+        const cd = this.keyCooldowns.get(i) || 0;
+        if (cd < minCooldown) {
+          minCooldown = cd;
+          earliestIdx = i;
+        }
+      }
+      const waitMs = minCooldown - now;
+      if (waitMs > 0 && waitMs <= 3000) {
+        await new Promise((r) => setTimeout(r, waitMs));
+        candidates.push(earliestIdx);
+      } else {
+        console.warn(
+          `[CoinStatsProvider] All ${totalKeys} API keys in active quarantine (earliest reset in ${Math.max(1, Math.round(waitMs / 1000))}s)`
+        );
+        throw new ProviderRateLimitError('CoinStats', Math.max(1000, waitMs));
+      }
+    }
+
     let lastError: any = null;
-    for (let attempt = 0; attempt < totalKeys; attempt++) {
-      const keyIdx = (this.activeKeyIndex + attempt) % totalKeys;
+
+    for (const keyIdx of candidates) {
       const client = this.clients[keyIdx];
       const keyIdentifier = `key_${keyIdx + 1}`;
 
       try {
-        const result = await this.executeWithResilience(
-          `${operationName}:${keyIdentifier}`,
-          async () => {
-            return await fn(client);
-          },
-          {
-            timeoutMs: config.coinstats.timeoutMs || 10000,
-            retries: 1, // Only 1 network retry before trying next key or propagating
-            isRetryable: (err) => {
-              // 429 / 406 triggers immediate key rotation, abort retry on this key
-              if (err.statusCode === 429 || err.statusCode === 406) {
-                return false;
-              }
-              return err.isRetryable;
-            },
-          }
-        );
+        await this.throttle();
+
+        // Execute remote call with client
+        const result = await fn(client);
 
         this.budgetTracker.recordKeyUsage('CoinStats', keyIdentifier, true);
 
-        // If rotated successfully to a healthy key, set it as the primary index
+        // Reset failure count on provider level if circuit was half-open/open
+        if (this.getCircuitState() !== 'CLOSED') {
+          this.resetCircuitBreaker();
+        }
+
+        // Switch active key to this successful key
         if (keyIdx !== this.activeKeyIndex) {
           console.log(`[CoinStatsProvider] Switched primary key to #${keyIdx + 1}`);
           this.activeKeyIndex = keyIdx;
@@ -114,134 +143,43 @@ export class CoinStatsProvider extends BaseProvider implements MarketDataProvide
         return result;
       } catch (err: any) {
         this.budgetTracker.recordKeyUsage('CoinStats', keyIdentifier, false);
-        const status = err.statusCode || err.response?.status;
-        if (status === 429 || status === 406) {
+        const status = err.response?.status || err.statusCode;
+        lastError = err;
+
+        if (status === 406) {
+          // Monthly credits exhausted! Quarantine for 24 hours
           console.warn(
-            `[CoinStatsProvider] Key #${keyIdx + 1} quota/rate-limit hit (${status}). Instantly rotating to next key...`
+            `[CoinStatsProvider] Key #${keyIdx + 1} exhausted monthly credits (406). Quarantining for 24 hours.`
           );
-          lastError = err;
-          continue; // Instantly move to next key without sleeping
+          this.keyCooldowns.set(keyIdx, Date.now() + 24 * 60 * 60 * 1000);
+          continue;
         }
-        // Non-rate-limit error (e.g. 404, CircuitBreakerOpen, 500)
-        throw err;
+
+        if (status === 429) {
+          // Burst or per-minute rate limit hit!
+          const retryAfter = parseInt(err.response?.headers?.['retry-after'] || '60', 10);
+          const cooldownMs = Math.max(retryAfter * 1000, 60000);
+          console.warn(
+            `[CoinStatsProvider] Key #${keyIdx + 1} rate limited (429). Quarantining for ${cooldownMs / 1000}s.`
+          );
+          this.keyCooldowns.set(keyIdx, Date.now() + cooldownMs);
+          continue;
+        }
+
+        // 404 is not an API error, rethrow
+        if (status === 404) {
+          throw err;
+        }
+
+        // For other errors (e.g. 5xx or network drop), try next candidate key
+        console.warn(
+          `[CoinStatsProvider] Key #${keyIdx + 1} request error (${status || err.message}). Rotating to next key...`
+        );
       }
     }
 
-    console.error(`[CoinStatsProvider] All ${totalKeys} API keys exhausted`);
-    throw new ProviderRateLimitError('CoinStats', undefined, lastError);
-  }
-
-  async getMarketOverview(): Promise<MarketOverview> {
-    try {
-      const response = await this.requestWithRotation('getMarketOverview', (c) => c.get('/markets'));
-      return mapCoinStatsOverview(response.data);
-    } catch (err: any) {
-      if (err instanceof ProviderError) throw err;
-      throw new ProviderError('CoinStats', `Failed to fetch market overview: ${err.message}`, 502, 'OVERVIEW_ERROR', false, err);
-    }
-  }
-
-  async getCoins(options: CoinListOptions = {}): Promise<PaginatedTokens> {
-    const page = options.page || 1;
-    const limit = options.limit || 50;
-
-    const params: Record<string, any> = {
-      page,
-      limit,
-    };
-
-    if (options.currency) {
-      params.currency = options.currency;
-    }
-
-    try {
-      const response = await this.requestWithRotation('getCoins', (c) => c.get('/coins', { params }));
-      const rawResult = response.data?.result || response.data?.coins || response.data || [];
-      const tokens = mapCoinStatsCoinList(Array.isArray(rawResult) ? rawResult : []);
-      const hasMore = response.data?.meta?.hasNextPage ?? (tokens.length >= limit);
-
-      return {
-        tokens,
-        meta: {
-          page,
-          limit,
-          hasMore,
-        },
-      };
-    } catch (err: any) {
-      if (err instanceof ProviderError) throw err;
-      throw new ProviderError('CoinStats', `Failed to fetch coins list: ${err.message}`, 502, 'COINS_ERROR', false, err);
-    }
-  }
-
-  async getCoinById(coinId: string): Promise<MarketToken | null> {
-    if (!coinId) return null;
-
-    try {
-      const response = await this.requestWithRotation(`getCoinById(${coinId})`, (c) =>
-        c.get(`/coins/${encodeURIComponent(coinId)}`)
-      );
-      const raw = response.data?.coin || response.data?.result || response.data;
-      return mapCoinStatsCoin(raw);
-    } catch (err: any) {
-      if (err.statusCode === 404 || err.response?.status === 404) {
-        return null;
-      }
-      if (err instanceof ProviderError) throw err;
-      throw new ProviderError('CoinStats', `Failed to fetch coin ${coinId}: ${err.message}`, 502, 'COIN_DETAIL_ERROR', false, err);
-    }
-  }
-
-  async getCoinChart(coinId: string, period: string = '1w'): Promise<ChartResponse> {
-    if (!coinId) {
-      throw new ProviderError('CoinStats', 'coinId is required for chart data', 400, 'INVALID_COIN_ID');
-    }
-
-    let mappedPeriod = period.toLowerCase();
-    if (mappedPeriod === '1h') mappedPeriod = '24h';
-    if (mappedPeriod === '1d' || mappedPeriod === 'd') mappedPeriod = '24h';
-    if (mappedPeriod === '1w' || mappedPeriod === 'w') mappedPeriod = '1w';
-    if (mappedPeriod === '1m' || mappedPeriod === 'm') mappedPeriod = '1m';
-    if (mappedPeriod === '3m') mappedPeriod = '3m';
-    if (mappedPeriod === '6m') mappedPeriod = '6m';
-    if (mappedPeriod === '1y' || mappedPeriod === 'y') mappedPeriod = '1y';
-    if (mappedPeriod === 'all') mappedPeriod = 'all';
-
-    try {
-      const response = await this.requestWithRotation(`getCoinChart(${coinId})`, (c) =>
-        c.get(`/coins/${encodeURIComponent(coinId)}/charts`, {
-          params: { period: mappedPeriod },
-        })
-      );
-
-      return mapCoinStatsChart(coinId, period, response.data);
-    } catch (err: any) {
-      if (err instanceof ProviderError) throw err;
-      throw new ProviderError('CoinStats', `Failed to fetch chart for ${coinId}: ${err.message}`, 502, 'CHART_ERROR', false, err);
-    }
-  }
-
-  async searchCoins(query: string): Promise<MarketToken[]> {
-    if (!query || query.trim().length === 0) {
-      return [];
-    }
-
-    try {
-      const response = await this.requestWithRotation('searchCoins', (c) =>
-        c.get('/coins', {
-          params: {
-            name: query.trim(),
-            limit: 20,
-          },
-        })
-      );
-
-      const rawResult = response.data?.result || response.data?.coins || response.data || [];
-      return mapCoinStatsCoinList(Array.isArray(rawResult) ? rawResult : []);
-    } catch (err: any) {
-      if (err instanceof ProviderError) throw err;
-      throw new ProviderError('CoinStats', `Failed to search coins for "${query}": ${err.message}`, 502, 'SEARCH_ERROR', false, err);
-    }
+    console.error(`[CoinStatsProvider] All candidate keys failed for ${operationName}`);
+    throw new ProviderRateLimitError('CoinStats', 30000, lastError);
   }
 
   async getWalletBalance(blockchain: string, address: string): Promise<any[]> {

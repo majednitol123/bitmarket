@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { coinStatsProvider } from '../../providers/CoinStatsProvider';
 import { blockchainRpcProvider } from '../../providers/BlockchainRpcProvider';
 import { marketService } from '../market/market.service';
@@ -290,26 +291,22 @@ export class PortfolioService {
           await this.enrichTopErc20Balances(normChain, targetAddress, holdings, summary);
         }
 
-        // 3. Price enrichment from shared master token cache
+        // 3. Live price and 24h change enrichment from CoinMarketCap master token cache
         try {
           const masterTokens = await marketService.getMasterTokenList(false);
           const masterBySymbol = new Map(masterTokens.map((t) => [t.symbol.toUpperCase(), t]));
           const masterById = new Map(masterTokens.map((t) => [t.id.toLowerCase(), t]));
 
           for (const h of holdings) {
-            if (!h.priceUsd || h.priceUsd === 0) {
-              const matched =
-                masterById.get(h.coinId.toLowerCase()) ||
-                masterBySymbol.get(h.symbol.toUpperCase());
-              if (matched && matched.priceUsd > 0) {
-                h.priceUsd = matched.priceUsd;
-                h.valueUsd = Math.round(h.amount * h.priceUsd * 100) / 100;
-                if (!h.change24hPercent && matched.change24hPercent) {
-                  h.change24hPercent = matched.change24hPercent;
-                }
-                if (!h.logoUrl && matched.logoUrl) {
-                  h.logoUrl = matched.logoUrl;
-                }
+            const matched =
+              masterById.get(h.coinId.toLowerCase()) ||
+              masterBySymbol.get(h.symbol.toUpperCase());
+            if (matched && matched.priceUsd > 0) {
+              h.priceUsd = matched.priceUsd;
+              h.valueUsd = Math.round(h.amount * h.priceUsd * 100) / 100;
+              h.change24hPercent = matched.change24hPercent || 0;
+              if (matched.logoUrl) {
+                h.logoUrl = matched.logoUrl;
               }
             }
           }
@@ -317,9 +314,28 @@ export class PortfolioService {
           console.warn('[PortfolioService] Price enrichment from master market cache failed:', err.message);
         }
 
-        // 4. Recompute total portfolio summary metrics
+        // 4. Recompute total portfolio summary metrics and weighted 24h change
         const totalValueUsd = holdings.reduce((sum, h) => sum + (h.valueUsd || 0), 0);
+        let totalPriorValue = 0;
+
+        for (const h of holdings) {
+          if (h.valueUsd && h.valueUsd > 0) {
+            const changeFactor = 1 + (h.change24hPercent || 0) / 100;
+            const priorTokenVal = changeFactor > 0 ? h.valueUsd / changeFactor : h.valueUsd;
+            totalPriorValue += priorTokenVal;
+          }
+        }
+
+        const change24hUsd =
+          totalPriorValue > 0 ? Math.round((totalValueUsd - totalPriorValue) * 100) / 100 : 0;
+        const change24hPercent =
+          totalPriorValue > 0
+            ? Math.round(((totalValueUsd - totalPriorValue) / totalPriorValue) * 10000) / 100
+            : 0;
+
         summary.totalValueUsd = Math.round(totalValueUsd * 100) / 100;
+        summary.change24hUsd = change24hUsd;
+        summary.change24hPercent = change24hPercent;
         summary.holdingsCount = holdings.length;
 
         // Recompute allocations
@@ -402,29 +418,38 @@ export class PortfolioService {
       cacheKey,
       { freshSeconds: config.cacheTtl.transactions, staleSeconds: config.cacheTtl.transactions * 4 },
       async () => {
+        let transactions: PortfolioTransaction[] = [];
+        let hasMore = false;
+
         try {
           const raw = await coinStatsProvider.getWalletTransactions(normChain, targetAddress, page, limit);
-          const transactions = mapCoinStatsTransactions(normChain, raw.result);
-
-          return {
-            transactions,
-            meta: {
-              page,
-              limit,
-              hasMore: raw.meta?.hasNextPage ?? (transactions.length >= limit),
-            },
-          };
+          transactions = mapCoinStatsTransactions(normChain, raw.result);
+          hasMore = raw.meta?.hasNextPage ?? (transactions.length >= limit);
         } catch (err: any) {
-          console.warn(`[PortfolioService] Non-critical transactions error (${normChain}:${targetAddress}):`, err.message);
-          return {
-            transactions: [],
-            meta: {
-              page,
-              limit,
-              hasMore: false,
-            },
-          };
+          console.warn(`[PortfolioService] CoinStats transactions error (${normChain}:${targetAddress}):`, err.message);
         }
+
+        // Fallback to on-chain transfers via Alchemy if CoinStats returned no transactions
+        if (transactions.length === 0 && ['ethereum', 'eth', 'polygon', 'arbitrum', 'arb', 'optimism', 'opt', 'base'].includes(normChain)) {
+          try {
+            const alchemyTxs = await this.getAlchemyTransactions(normChain, targetAddress, limit);
+            if (alchemyTxs.length > 0) {
+              transactions = alchemyTxs;
+              hasMore = alchemyTxs.length >= limit;
+            }
+          } catch (alchErr: any) {
+            console.warn(`[PortfolioService] Alchemy transactions fallback failed:`, alchErr.message);
+          }
+        }
+
+        return {
+          transactions,
+          meta: {
+            page,
+            limit,
+            hasMore,
+          },
+        };
       },
       { source: 'coinstats' }
     );
@@ -505,8 +530,13 @@ export class PortfolioService {
         try {
           const chartPromises = topHoldings.map(async (h) => {
             try {
-              const chartData = await marketService.getTokenChart(h.coinId, period);
+              const targetCoin = h.coinId || h.symbol;
+              let chartData = await marketService.getTokenChart(targetCoin, period);
+              if ((!chartData.points || chartData.points.length === 0) && h.symbol && h.symbol.toLowerCase() !== targetCoin.toLowerCase()) {
+                chartData = await marketService.getTokenChart(h.symbol, period);
+              }
               return {
+                symbol: h.symbol,
                 amount: h.amount,
                 valueUsd: h.valueUsd || 0,
                 points: chartData.points,
@@ -531,6 +561,7 @@ export class PortfolioService {
                 const lastNativePrice = nativeChart.points[nativeChart.points.length - 1]?.priceUsd || 1;
                 validResults = [
                   {
+                    symbol: nativeAsset.toUpperCase(),
                     amount: currentTotal / lastNativePrice,
                     valueUsd: currentTotal,
                     points: nativeChart.points,
@@ -572,8 +603,8 @@ export class PortfolioService {
               }
             }
 
-            const modeledFraction = totalWeights / (portfolio.summary.totalValueUsd || 1);
-            const totalEstimated = modeledFraction > 0.1 ? totalUsdAtTime / modeledFraction : totalUsdAtTime;
+            const unmodeledValue = Math.max(0, (portfolio.summary.totalValueUsd || 0) - totalWeights);
+            const totalEstimated = totalUsdAtTime + unmodeledValue;
 
             return {
               timestamp: basePt.timestamp,
@@ -621,6 +652,102 @@ export class PortfolioService {
   async getDefi(chain: string, address: string): Promise<DeFiPosition[]> {
     const portfolio = await this.getPortfolio(chain, address);
     return portfolio.defi || [];
+  }
+
+  /**
+   * Fetches real on-chain transfer events using Alchemy asset transfers RPC.
+   * Serves as reliable fallback when upstream indexing providers are desynced or rate-limited.
+   */
+  private async getAlchemyTransactions(
+    chain: string,
+    address: string,
+    limit: number = 20
+  ): Promise<PortfolioTransaction[]> {
+    const alchemyKey = process.env.ALCHEMY_API_KEY || process.env.EXPO_PUBLIC_ALCHEMY_API_KEY;
+    if (!alchemyKey) return [];
+
+    let network = 'eth-mainnet';
+    if (chain === 'polygon') network = 'polygon-mainnet';
+    else if (chain === 'arbitrum' || chain === 'arb') network = 'arb-mainnet';
+    else if (chain === 'optimism' || chain === 'opt') network = 'opt-mainnet';
+    else if (chain === 'base') network = 'base-mainnet';
+
+    const hexLimit = '0x' + Math.min(100, Math.max(1, limit)).toString(16);
+
+    const [incomingRes, outgoingRes] = await Promise.allSettled([
+      axios.post(
+        `https://${network}.g.alchemy.com/v2/${alchemyKey}`,
+        {
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'alchemy_getAssetTransfers',
+          params: [
+            {
+              fromBlock: '0x0',
+              toBlock: 'latest',
+              toAddress: address,
+              category: ['external', 'erc20'],
+              maxCount: hexLimit,
+              order: 'desc',
+            },
+          ],
+        },
+        { timeout: 8000 }
+      ),
+      axios.post(
+        `https://${network}.g.alchemy.com/v2/${alchemyKey}`,
+        {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'alchemy_getAssetTransfers',
+          params: [
+            {
+              fromBlock: '0x0',
+              toBlock: 'latest',
+              fromAddress: address,
+              category: ['external', 'erc20'],
+              maxCount: hexLimit,
+              order: 'desc',
+            },
+          ],
+        },
+        { timeout: 8000 }
+      ),
+    ]);
+
+    const incoming: any[] = incomingRes.status === 'fulfilled' ? incomingRes.value.data?.result?.transfers || [] : [];
+    const outgoing: any[] = outgoingRes.status === 'fulfilled' ? outgoingRes.value.data?.result?.transfers || [] : [];
+
+    const allTransfers = [...incoming, ...outgoing];
+    allTransfers.sort((a, b) => {
+      const timeA = a.metadata?.blockTimestamp ? new Date(a.metadata.blockTimestamp).getTime() : 0;
+      const timeB = b.metadata?.blockTimestamp ? new Date(b.metadata.blockTimestamp).getTime() : 0;
+      return timeB - timeA;
+    });
+
+    const target = address.toLowerCase();
+    return allTransfers.slice(0, limit).map((tx, idx) => {
+      const isSend = String(tx.from || '').toLowerCase() === target;
+      const symbol = String(tx.asset || 'ETH').toUpperCase();
+      const amountNum = Number(tx.value || 0);
+      const timestamp = tx.metadata?.blockTimestamp ? new Date(tx.metadata.blockTimestamp).getTime() : Date.now();
+
+      return {
+        id: tx.hash ? `${tx.hash}-${idx}` : `alch-${timestamp}-${idx}`,
+        type: isSend ? 'send' : 'receive',
+        date: timestamp,
+        hash: tx.hash || '',
+        explorerUrl: `https://etherscan.io/tx/${tx.hash || ''}`,
+        fromAddress: tx.from || '',
+        toAddress: tx.to || '',
+        coinSymbol: symbol,
+        coinName: symbol,
+        coinIcon: symbol === 'ETH' ? 'https://s2.coinmarketcap.com/static/img/coins/128x128/1027.png' : '',
+        amount: `${amountNum < 0.0001 ? amountNum.toPrecision(4) : amountNum.toLocaleString('en-US', { maximumFractionDigits: 4 })} ${symbol}`,
+        valueUsd: 0,
+        profitLoss: null,
+      };
+    });
   }
 
   /**

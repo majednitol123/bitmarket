@@ -1,10 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { marketService } from './market.service';
+import { marketDemandTracker } from './marketDemand';
+import { getProactiveRefreshInterval, setProactiveRefreshInterval } from './market.proactive';
 import { AppError } from '../../middleware/errorHandler';
 
 export class MarketController {
   async getOverview(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      marketDemandTracker.recordDemand();
       const forceRefresh = req.query.refresh === 'true' || req.query.force === 'true';
       const overview = await marketService.getOverview(forceRefresh);
       res.json({
@@ -18,6 +21,7 @@ export class MarketController {
 
   async getTokens(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      marketDemandTracker.recordDemand();
       const page = Math.max(1, parseInt(String(req.query.page || '1'), 10));
       const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '50'), 10)));
       const category = String(req.query.category || 'all');
@@ -96,6 +100,34 @@ export class MarketController {
       res.json({
         success: true,
         data: gainers,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async getInterval(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          intervalSeconds: getProactiveRefreshInterval(),
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async setInterval(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const intervalSeconds = parseInt(String(req.body.intervalSeconds || req.query.intervalSeconds || '5'), 10);
+      const updated = await setProactiveRefreshInterval(intervalSeconds);
+      res.json({
+        success: true,
+        data: {
+          intervalSeconds: updated,
+        },
       });
     } catch (err) {
       next(err);

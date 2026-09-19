@@ -14,9 +14,10 @@ import {
 } from "react-native";
 import { useTheme } from "styled-components/native";
 import { useSafeAreaInsets, EdgeInsets } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useDispatch, useSelector } from "react-redux";
+import { realtimeService } from "../../services/realtimeService";
 
 import type { ThemeType } from "../../styles/theme";
 import { SafeAreaContainer } from "../../components/Styles/Layout.styles";
@@ -28,7 +29,7 @@ import {
   SearchIcon,
   SwapIcon,
 } from "../../components/Icons/AppIcons";
-import { AppDispatch } from "../../store";
+import type { RootState, AppDispatch } from "../../store";
 import {
   fetchMarketOverview,
   fetchMarketTokens,
@@ -174,30 +175,87 @@ export default function MarketsScreen() {
   const hasMore = useSelector(selectHasMoreTokens);
   const isLoadingMore = useSelector(selectIsLoadingMore);
   const currentPage = useSelector(selectCurrentPage);
+  const dataUpdateInterval = useSelector(
+    (state: RootState) => state.settings?.dataUpdateInterval ?? 15
+  );
 
   // Local state for immediate typing responsiveness
   const [localSearchInput, setLocalSearchInput] = useState(reduxSearchQuery);
+  const localSearchInputRef = useRef(localSearchInput);
+  localSearchInputRef.current = localSearchInput;
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initial fetch and app foreground refresh
-  useEffect(() => {
-    dispatch(fetchMarketOverview());
-    dispatch(fetchMarketTokens({ category: selectedCategory, page: 1, append: false }));
+  // Live countdown timer in seconds (e.g. 5, 4, 3, 2, 1, 0, 5...)
+  const [countdown, setCountdown] = useState<number>(dataUpdateInterval);
 
-    const subscription = AppState.addEventListener("change", (nextAppState) => {
-      if (nextAppState === "active") {
-        dispatch(fetchMarketOverview());
-        dispatch(fetchMarketTokens({ category: selectedCategory, page: 1, append: false }));
+  // Screen Focus Lifecycle via Expo Router useFocusEffect:
+  // ONLY active when the user is visibly on the Markets screen.
+  // When user navigates to Settings, Portfolio, Swaps, or minimizes app:
+  // Cleanup runs IMMEDIATELY, unsubscribing from topics so backend stops calling external APIs!
+  useFocusEffect(
+    useCallback(() => {
+      // 1. Subscribe to real-time market updates & send initial market view ping
+      if (AppState.currentState === 'active') {
+        realtimeService.subscribe(['market:tokens', 'market:overview'], undefined, dataUpdateInterval);
+        realtimeService.pingMarketView();
       }
-    });
 
-    return () => {
-      subscription.remove();
-      if (searchDebounceRef.current) {
-        clearTimeout(searchDebounceRef.current);
-      }
-    };
-  }, [dispatch, selectedCategory]);
+      // Initial data fetch upon opening Market screen (served from cache)
+      dispatch(fetchMarketOverview({ forceRefresh: false }));
+      dispatch(fetchMarketTokens({ category: selectedCategory, page: 1, append: false, forceRefresh: false }));
+      setCountdown(dataUpdateInterval);
+
+      // Heartbeat pulse to keep market view lease active on server while user is actively looking at screen
+      const pingTimer = setInterval(() => {
+        if (AppState.currentState === 'active') {
+          realtimeService.pingMarketView();
+        }
+      }, 5000);
+
+      // Handle phone backgrounding/foregrounding while viewing Market screen
+      const appStateSub = AppState.addEventListener('change', (nextAppState) => {
+        if (nextAppState === 'active') {
+          realtimeService.subscribe(['market:tokens', 'market:overview'], undefined, dataUpdateInterval);
+          realtimeService.pingMarketView();
+          dispatch(fetchMarketOverview({ forceRefresh: false }));
+          dispatch(fetchMarketTokens({ category: selectedCategory, page: 1, append: false, forceRefresh: false }));
+        } else if (nextAppState.match(/inactive|background/)) {
+          realtimeService.unsubscribe(['market:tokens', 'market:overview']);
+        }
+      });
+
+      // 1-second countdown ticker for UI countdown display (e.g. 5, 4, 3, 2, 1, 0, 5...)
+      const timerId = setInterval(() => {
+        if (AppState.currentState !== 'active') return;
+
+        setCountdown((prev) => {
+          if (prev <= 0) {
+            return dataUpdateInterval;
+          }
+          const next = prev - 1;
+          if (next === 0) {
+            // Fallback sync only if offline or socket disconnected
+            if (!localSearchInputRef.current.trim() && !realtimeService.getIsConnected()) {
+              dispatch(fetchMarketOverview({ forceRefresh: false }));
+              dispatch(fetchMarketTokens({ category: selectedCategory, page: 1, append: false, forceRefresh: false }));
+            }
+          }
+          return next;
+        });
+      }, 1000);
+
+      // 2. User left Market screen (navigated to Settings, Portfolio, etc.)
+      return () => {
+        clearInterval(pingTimer);
+        clearInterval(timerId);
+        appStateSub.remove();
+        realtimeService.unsubscribe(['market:tokens', 'market:overview']);
+        if (searchDebounceRef.current) {
+          clearTimeout(searchDebounceRef.current);
+        }
+      };
+    }, [dispatch, selectedCategory, dataUpdateInterval])
+  );
 
   // Sync token prices to swap bridge whenever tokens change
   useEffect(() => {
@@ -208,8 +266,9 @@ export default function MarketsScreen() {
 
   // Pull to refresh
   const onRefresh = useCallback(() => {
+    setCountdown(dataUpdateInterval);
     dispatch(refreshMarketData());
-  }, [dispatch]);
+  }, [dispatch, dataUpdateInterval]);
 
   // Handle Category selection
   const handleCategoryPress = (cat: string) => {
@@ -312,6 +371,18 @@ export default function MarketsScreen() {
   // Render Header Component inside FlatList
   const renderListHeader = () => (
     <View style={styles.headerStack}>
+      {/* ═══ Real-time Live Badge & Countdown ═══ */}
+      <View style={styles.liveBadgeRow}>
+        <View style={styles.liveDot} />
+        <Text style={styles.liveBadgeText}>LIVE MARKET DATA</Text>
+        <Text style={styles.liveIntervalText}>• Next update in</Text>
+        <View style={[styles.countdownPill, countdown === 0 && styles.countdownPillActive]}>
+          <Text style={[styles.countdownText, countdown === 0 && styles.countdownTextActive]}>
+            {countdown}s
+          </Text>
+        </View>
+      </View>
+
       {/* ═══ Market Overview Summary Banner ═══ */}
       <View style={styles.statsBanner}>
         <View style={styles.statBox}>
@@ -576,8 +647,53 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       padding: 16,
     },
     headerStack: {
-      gap: 14,
-      marginBottom: 10,
+      gap: 12,
+      marginBottom: 12,
+    },
+    liveBadgeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 4,
+      marginBottom: -4,
+    },
+    liveDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 3.5,
+      backgroundColor: "#10B981",
+    },
+    liveBadgeText: {
+      color: "#10B981",
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 0.5,
+    },
+    liveIntervalText: {
+      color: theme.colors.lightGrey,
+      fontSize: 11,
+      fontWeight: "500",
+    },
+    countdownPill: {
+      backgroundColor: "rgba(16, 185, 129, 0.12)",
+      borderColor: "rgba(16, 185, 129, 0.3)",
+      borderWidth: 1,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: 6,
+    },
+    countdownPillActive: {
+      backgroundColor: "rgba(124, 58, 237, 0.2)",
+      borderColor: "rgba(124, 58, 237, 0.4)",
+    },
+    countdownText: {
+      color: "#10B981",
+      fontSize: 11,
+      fontWeight: "800",
+      fontVariant: ["tabular-nums"],
+    },
+    countdownTextActive: {
+      color: theme.colors.primaryLight || "#A855F7",
     },
     statsBanner: {
       flexDirection: "row",

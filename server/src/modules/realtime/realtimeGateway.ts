@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { realtimePubSub } from './realtimePubSub';
+import { setProactiveRefreshInterval, getProactiveRefreshInterval } from '../market/market.proactive';
 import {
   RealtimeMessage,
   RealtimeResource,
@@ -18,6 +19,7 @@ interface ClientSession {
   subscriptions: Set<RealtimeResource>;
   walletAddress?: string;
   connectedAt: number;
+  lastMarketPingAt?: number;
 }
 
 interface SseClient {
@@ -31,6 +33,7 @@ interface SseClient {
 
 const MAX_WEBSOCKET_CONNECTIONS = 5000;
 const HEARTBEAT_INTERVAL_MS = 25000; // 25 seconds
+const MARKET_VIEW_LEASE_MS = 12000; // 12 seconds proof-of-view lease
 
 export class RealtimeGateway {
   private wss: WebSocketServer | null = null;
@@ -83,8 +86,20 @@ export class RealtimeGateway {
     const socketId = `ws-${crypto.randomUUID().slice(0, 8)}`;
     const ip = req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || 'unknown';
 
-    // Default subscriptions: market overview and token snapshot updates
-    const defaultSubs = new Set<RealtimeResource>(['market:tokens', 'market:overview']);
+    // Prune existing duplicate connections from the same client IP (eliminates Fast Refresh zombies)
+    if (ip !== 'unknown' && ip !== '127.0.0.1' && ip !== '::1') {
+      this.wsClients.forEach((existingSession, existingId) => {
+        if (existingSession.ip === ip) {
+          try {
+            existingSession.ws.close(4001, 'Superseded by newer connection from same client');
+          } catch {}
+          this.wsClients.delete(existingId);
+        }
+      });
+    }
+
+    // Default subscriptions: system messages only (market topics subscribed on-demand by viewing screens)
+    const defaultSubs = new Set<RealtimeResource>(['system']);
 
     const session: ClientSession = {
       id: socketId,
@@ -109,6 +124,7 @@ export class RealtimeGateway {
           socketId,
           subscriptions: Array.from(defaultSubs),
           heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
+          intervalSeconds: getProactiveRefreshInterval(),
         },
       })
     );
@@ -156,13 +172,45 @@ export class RealtimeGateway {
       return;
     }
 
+    if (msg.action === 'market_ping') {
+      session.lastMarketPingAt = Date.now();
+      return;
+    }
+
+    if (msg.action === 'set_interval' && typeof msg.intervalSeconds === 'number') {
+      setProactiveRefreshInterval(msg.intervalSeconds).catch(() => {});
+      session.ws.send(
+        JSON.stringify({
+          resource: 'system',
+          eventType: 'interval_updated',
+          snapshotVersion: 0,
+          timestamp: Date.now(),
+          instanceId: realtimePubSub.instanceId,
+          metadata: {
+            intervalSeconds: msg.intervalSeconds,
+          },
+        })
+      );
+      return;
+    }
+
     if (msg.action === 'subscribe' && Array.isArray(msg.resources)) {
+      if (typeof msg.intervalSeconds === 'number' && msg.intervalSeconds >= 5) {
+        setProactiveRefreshInterval(msg.intervalSeconds).catch(() => {});
+      }
       for (const r of msg.resources) {
         session.subscriptions.add(r);
+      }
+      if (msg.resources.includes('market:tokens') || msg.resources.includes('market:overview')) {
+        session.lastMarketPingAt = Date.now();
       }
       if (msg.walletAddress) {
         session.walletAddress = msg.walletAddress.toLowerCase().trim();
       }
+
+      console.log(
+        `[RealtimeGateway] Client ${session.id} subscribed to [${msg.resources.join(', ')}] (Active market subscribers: ${this.getActiveMarketSubscriberCount()})`
+      );
 
       session.ws.send(
         JSON.stringify({
@@ -173,6 +221,7 @@ export class RealtimeGateway {
           instanceId: realtimePubSub.instanceId,
           metadata: {
             activeSubscriptions: Array.from(session.subscriptions),
+            intervalSeconds: getProactiveRefreshInterval(),
           },
         })
       );
@@ -180,6 +229,12 @@ export class RealtimeGateway {
       for (const r of msg.resources) {
         session.subscriptions.delete(r);
       }
+      if (!session.subscriptions.has('market:tokens') && !session.subscriptions.has('market:overview')) {
+        session.lastMarketPingAt = undefined;
+      }
+      console.log(
+        `[RealtimeGateway] Client ${session.id} unsubscribed from [${msg.resources.join(', ')}] (Active market subscribers: ${this.getActiveMarketSubscriberCount()})`
+      );
     }
   }
 
@@ -275,11 +330,16 @@ export class RealtimeGateway {
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
     const walletAddress = (req.query.walletAddress as string)?.toLowerCase().trim();
 
+    // Parse requested topics or default to system only
+    const requestedTopics = req.query.topics
+      ? (req.query.topics as string).split(',').map((t) => t.trim() as RealtimeResource)
+      : (['system'] as RealtimeResource[]);
+
     const client: SseClient = {
       id: clientId,
       res,
       ip,
-      subscriptions: new Set<RealtimeResource>(['market:tokens', 'market:overview']),
+      subscriptions: new Set<RealtimeResource>(requestedTopics),
       walletAddress,
       connectedAt: Date.now(),
     };
@@ -304,6 +364,46 @@ export class RealtimeGateway {
   }
 
   /**
+   * Returns the count of active WebSocket and SSE clients subscribed to market updates
+   */
+  public getActiveMarketSubscriberCount(): number {
+    const now = Date.now();
+    let count = 0;
+    this.wsClients.forEach((session) => {
+      if (!session.isAlive) return;
+      const hasMarket =
+        session.subscriptions.has('market:tokens') || session.subscriptions.has('market:overview');
+      if (!hasMarket) return;
+
+      // Active view lease: must have proved active view within last 12 seconds
+      if (session.lastMarketPingAt && now - session.lastMarketPingAt < MARKET_VIEW_LEASE_MS) {
+        count++;
+      } else {
+        // Auto-expire lease when client stops confirming active market screen view
+        session.subscriptions.delete('market:tokens');
+        session.subscriptions.delete('market:overview');
+        session.lastMarketPingAt = undefined;
+      }
+    });
+    this.sseClients.forEach((client) => {
+      if (
+        client.subscriptions.has('market:tokens') ||
+        client.subscriptions.has('market:overview')
+      ) {
+        count++;
+      }
+    });
+    return count;
+  }
+
+  /**
+   * Checks whether there are active subscribers currently watching market data
+   */
+  public hasActiveMarketSubscribers(): boolean {
+    return this.getActiveMarketSubscriberCount() > 0;
+  }
+
+  /**
    * Retrieves gateway statistics
    */
   public async getStats(): Promise<RealtimeGatewayStats> {
@@ -311,11 +411,31 @@ export class RealtimeGateway {
     return {
       instanceId: realtimePubSub.instanceId,
       activeWebSocketConnections: this.wsClients.size,
+      activeMarketSubscribers: this.getActiveMarketSubscriberCount(),
       activeSseConnections: this.sseClients.size,
       totalMessagesBroadcast: this.totalMessagesBroadcast,
       snapshotVersions,
       uptimeSeconds: Math.floor((Date.now() - this.startedAt) / 1000),
+      clients: Array.from(this.wsClients.values()).map((s) => ({
+        id: s.id,
+        ip: s.ip,
+        subscriptions: Array.from(s.subscriptions),
+        walletAddress: s.walletAddress,
+      })),
     };
+  }
+
+  /**
+   * Forces all connected sockets to disconnect and reconnect fresh with updated defaults
+   */
+  public disconnectAllClients(): void {
+    this.wsClients.forEach((session) => {
+      try {
+        session.ws.close(4000, 'Session reset');
+      } catch {}
+    });
+    this.wsClients.clear();
+    console.log('[RealtimeGateway] Forced all existing sockets to reconnect fresh');
   }
 
   /**

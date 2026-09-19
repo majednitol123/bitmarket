@@ -1,8 +1,6 @@
 import {
   MarketOverview,
   MarketToken,
-  ChartPoint,
-  ChartResponse,
 } from './market.types';
 
 function parseNumber(val: any, fallback: number = 0): number {
@@ -14,71 +12,71 @@ function parseNumber(val: any, fallback: number = 0): number {
   return fallback;
 }
 
-export function mapCoinStatsOverview(raw: any): MarketOverview {
+export function mapCoinMarketCapOverview(raw: any): MarketOverview {
+  const data = raw?.data || raw;
+  const quote = data?.quote?.USD || {};
   return {
-    marketCapUsd: parseNumber(raw?.marketCap, 0),
-    volume24hUsd: parseNumber(raw?.volume, 0),
-    btcDominancePercent: parseNumber(raw?.btcDominance, 0),
-    marketCapChange24hPercent: parseNumber(raw?.marketCapChange, 0),
-    volumeChange24hPercent: parseNumber(raw?.volumeChange, 0),
-    btcDominanceChangePercent: parseNumber(raw?.btcDominanceChange, 0),
-    updatedAt: new Date().toISOString(),
+    marketCapUsd: parseNumber(quote.total_market_cap, 0),
+    volume24hUsd: parseNumber(quote.total_volume_24h, 0),
+    btcDominancePercent: parseNumber(data?.btc_dominance, 0),
+    marketCapChange24hPercent: parseNumber(quote.total_market_cap_yesterday_percentage_change, 0),
+    volumeChange24hPercent: parseNumber(quote.total_volume_24h_yesterday_percentage_change, 0),
+    btcDominanceChangePercent: parseNumber(data?.btc_dominance_24h_percentage_change, 0),
+    updatedAt: quote.last_updated || data?.last_updated || new Date().toISOString(),
   };
 }
 
-export function mapCoinStatsCoin(raw: any): MarketToken | null {
-  if (!raw || !raw.id || !raw.symbol || !raw.name) {
+export function mapCoinMarketCapCoin(raw: any): MarketToken | null {
+  if (!raw || !raw.symbol || !raw.name) {
     return null;
   }
 
-  // Normalize contract addresses if present
-  let contractAddress: string | undefined = raw.contractAddress;
+  const quote = raw.quote?.USD || {};
+  const cmcId = typeof raw.id === 'number' ? raw.id : parseInt(raw.id, 10);
+  const logoUrl = !isNaN(cmcId) && cmcId > 0
+    ? `https://s2.coinmarketcap.com/static/img/coins/128x128/${cmcId}.png`
+    : '';
+
+  let contractAddress: string | undefined = undefined;
   let contractAddresses: { blockchain: string; contractAddress: string }[] | undefined = undefined;
 
-  if (Array.isArray(raw.contractAddresses)) {
-    const addresses = raw.contractAddresses
-      .filter((c: any) => c && c.blockchain && c.contractAddress)
-      .map((c: any) => ({
-        blockchain: String(c.blockchain),
-        contractAddress: String(c.contractAddress),
-      }));
-    if (addresses.length > 0) {
-      contractAddresses = addresses;
-      if (!contractAddress) {
-        contractAddress = addresses[0].contractAddress;
-      }
-    }
+  if (raw.platform && raw.platform.token_address) {
+    contractAddress = raw.platform.token_address;
+    contractAddresses = [
+      {
+        blockchain: raw.platform.slug || raw.platform.name || 'ethereum',
+        contractAddress: raw.platform.token_address,
+      },
+    ];
   }
 
-  // Parse sparkline if available
-  const sparkline = Array.isArray(raw.sparkline)
-    ? raw.sparkline.filter((val: any) => typeof val === 'number')
-    : undefined;
+  const tags = Array.isArray(raw.tags) ? raw.tags : [];
 
   return {
-    id: String(raw.id),
+    id: raw.slug ? String(raw.slug).toLowerCase() : String(raw.id),
     symbol: String(raw.symbol).toUpperCase(),
     name: String(raw.name),
-    logoUrl: raw.icon || '',
-    priceUsd: parseNumber(raw.price, 0),
-    change24hPercent: parseNumber(raw.priceChange1d, 0),
-    change1hPercent: parseNumber(raw.priceChange1h, 0),
-    change1wPercent: parseNumber(raw.priceChange1w, 0),
-    marketCapUsd: parseNumber(raw.marketCap, 0),
-    volume24hUsd: parseNumber(raw.volume, 0),
-    rank: parseNumber(raw.rank, 9999),
+    logoUrl,
+    priceUsd: parseNumber(quote.price, 0),
+    change24hPercent: parseNumber(quote.percent_change_24h, 0),
+    change1hPercent: parseNumber(quote.percent_change_1h, 0),
+    change1wPercent: parseNumber(quote.percent_change_7d, 0),
+    marketCapUsd: parseNumber(quote.market_cap, 0),
+    volume24hUsd: parseNumber(quote.volume_24h, 0),
+    rank: parseNumber(raw.cmc_rank, 9999),
     contractAddress,
     contractAddresses,
-    priceUpdatedAt: new Date().toISOString(),
-    sparkline,
+    priceUpdatedAt: quote.last_updated || raw.last_updated || new Date().toISOString(),
+    cmcId: !isNaN(cmcId) ? cmcId : undefined,
+    tags,
   };
 }
 
-export function mapCoinStatsCoinList(rawList: any[]): MarketToken[] {
+export function mapCoinMarketCapCoinList(rawList: any[]): MarketToken[] {
   if (!Array.isArray(rawList)) return [];
   const tokens: MarketToken[] = [];
   for (const raw of rawList) {
-    const token = mapCoinStatsCoin(raw);
+    const token = mapCoinMarketCapCoin(raw);
     if (token) {
       tokens.push(token);
     }
@@ -86,48 +84,3 @@ export function mapCoinStatsCoinList(rawList: any[]): MarketToken[] {
   return tokens;
 }
 
-export function mapCoinStatsChart(coinId: string, period: string, rawChart: any): ChartResponse {
-  let pointsRaw: any[] = [];
-
-  if (Array.isArray(rawChart)) {
-    pointsRaw = rawChart;
-  } else if (rawChart && Array.isArray(rawChart.chart)) {
-    pointsRaw = rawChart.chart;
-  } else if (rawChart && Array.isArray(rawChart.result)) {
-    pointsRaw = rawChart.result;
-  }
-
-  // CoinStats chart items are typically: [timestamp, price, btcPrice, volume]
-  const points: ChartPoint[] = [];
-
-  for (const item of pointsRaw) {
-    if (Array.isArray(item) && item.length >= 2) {
-      // timestamp may be in seconds or milliseconds
-      let ts = Number(item[0]);
-      if (ts < 1e11) {
-        ts = ts * 1000; // convert to milliseconds
-      }
-      const price = Number(item[1]);
-      const volume = item.length >= 4 ? Number(item[3]) : undefined;
-      if (!isNaN(ts) && !isNaN(price)) {
-        points.push({ timestamp: ts, priceUsd: price, volume });
-      }
-    } else if (item && typeof item === 'object') {
-      let ts = Number(item.timestamp || item.time || item.t);
-      if (ts < 1e11) {
-        ts = ts * 1000;
-      }
-      const price = Number(item.price || item.p || item.val || item.value);
-      if (!isNaN(ts) && !isNaN(price)) {
-        points.push({ timestamp: ts, priceUsd: price, volume: item.volume });
-      }
-    }
-  }
-
-  return {
-    tokenId: coinId,
-    period,
-    points,
-    updatedAt: new Date().toISOString(),
-  };
-}

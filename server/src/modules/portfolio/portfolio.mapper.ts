@@ -327,16 +327,27 @@ export function mapCoinStatsDefi(
       const investments = Array.isArray(protocol.investments) ? protocol.investments : [];
 
       for (const inv of investments) {
-        const poolName = inv.pool?.name || inv.name || `${protoName} Deposit`;
+        const poolName =
+          inv.pool?.name ||
+          (inv.symbols ? `${inv.name || 'Pool'} (${inv.symbols})` : inv.name) ||
+          `${protoName} Deposit`;
         const key = `${protoName.toLowerCase()}:${poolName.toLowerCase()}`;
         if (seenKeys.has(key)) continue;
         seenKeys.add(key);
 
-        const usdVal = Number(inv.totalValue?.USD || inv.usdValue || 0);
+        const usdVal = Number(
+          inv.value?.USD ??
+          inv.totalValue?.USD ??
+          inv.usdValue ??
+          protocol.totalValue?.USD ??
+          0
+        );
         const depStr = usdVal > 0
           ? `$${usdVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
           : inv.tokens?.[0]
           ? `${Number(inv.tokens[0].amount || 0).toLocaleString('en-US', { maximumFractionDigits: 4 })} ${inv.tokens[0].symbol}`
+          : inv.assets?.[0]
+          ? `${Number(inv.assets[0].amount || 0).toLocaleString('en-US', { maximumFractionDigits: 4 })} ${inv.assets[0].symbol}`
           : '$0.00';
 
         const apyStr = inv.apy != null && Number(inv.apy) > 0

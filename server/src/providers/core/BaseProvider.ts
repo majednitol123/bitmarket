@@ -123,17 +123,23 @@ export abstract class BaseProvider {
 
         // If not retryable or final attempt, fail and update circuit breaker
         if (!retryable || isLastAttempt) {
-          this.consecutiveFailures += 1;
-          if (
-            this.consecutiveFailures >= this.maxConsecutiveFailures ||
-            this.circuitState === 'HALF_OPEN'
-          ) {
-            this.circuitState = 'OPEN';
-            this.openedAt = Date.now();
-            this.budgetTracker.setCircuitBreakerState(this.providerName, 'OPEN');
-            console.error(
-              `[${this.providerName}] Circuit breaker TRIPPED to OPEN after ${this.consecutiveFailures} failures.`
-            );
+          const isRateLimitGuard =
+            normalized.code === 'OUTBOUND_RATE_LIMIT_GUARD' ||
+            normalized instanceof CircuitBreakerOpenError;
+
+          if (!isRateLimitGuard) {
+            this.consecutiveFailures += 1;
+            if (
+              this.consecutiveFailures >= this.maxConsecutiveFailures ||
+              this.circuitState === 'HALF_OPEN'
+            ) {
+              this.circuitState = 'OPEN';
+              this.openedAt = Date.now();
+              this.budgetTracker.setCircuitBreakerState(this.providerName, 'OPEN');
+              console.error(
+                `[${this.providerName}] Circuit breaker TRIPPED to OPEN after ${this.consecutiveFailures} failures.`
+              );
+            }
           }
 
           this.budgetTracker.recordRequest(

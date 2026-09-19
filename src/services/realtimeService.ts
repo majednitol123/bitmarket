@@ -39,7 +39,7 @@ class RealtimeService {
   private messageListeners = new Set<RealtimeListener>();
   private connectionListeners = new Set<ConnectionListener>();
   private lastSeenVersions = new Map<string, number>();
-  private subscribedResources = new Set<RealtimeResource>(['market:tokens', 'market:overview']);
+  private subscribedResources = new Set<RealtimeResource>(['system']);
   private activeWalletAddress: string | null = null;
   private isConnected = false;
 
@@ -149,6 +149,8 @@ class RealtimeService {
     }, jitter);
   }
 
+  private currentIntervalSeconds = 5;
+
   /**
    * Sends topic subscription to the gateway
    */
@@ -159,6 +161,7 @@ class RealtimeService {
       action: 'subscribe',
       resources: Array.from(this.subscribedResources),
       walletAddress: this.activeWalletAddress || undefined,
+      intervalSeconds: this.currentIntervalSeconds,
     };
 
     try {
@@ -171,14 +174,57 @@ class RealtimeService {
   /**
    * Dynamically subscribes to additional topics (e.g. portfolio or price alerts)
    */
-  public subscribe(resources: RealtimeResource[], walletAddress?: string): void {
+  public subscribe(resources: RealtimeResource[], walletAddress?: string, intervalSeconds?: number): void {
     for (const r of resources) {
       this.subscribedResources.add(r);
     }
     if (walletAddress) {
       this.activeWalletAddress = walletAddress;
     }
+    if (typeof intervalSeconds === 'number' && intervalSeconds >= 5) {
+      this.currentIntervalSeconds = intervalSeconds;
+    }
     this.sendSubscriptionPayload();
+  }
+
+  /**
+   * Dynamically updates live market update interval on the server (5s, 10s, 15s, 30s)
+   */
+  public setUpdateInterval(intervalSeconds: number): void {
+    this.currentIntervalSeconds = Math.max(5, Math.min(60, intervalSeconds));
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try {
+        this.ws.send(
+          JSON.stringify({
+            action: 'set_interval',
+            intervalSeconds: this.currentIntervalSeconds,
+          })
+        );
+      } catch (err: any) {
+        console.warn('[RealtimeService] Error sending interval update:', err.message);
+      }
+    }
+  }
+
+  /**
+   * Dynamically unsubscribes from topics (e.g. when leaving Markets screen)
+   */
+  public unsubscribe(resources: RealtimeResource[]): void {
+    for (const r of resources) {
+      this.subscribedResources.delete(r);
+    }
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try {
+        this.ws.send(
+          JSON.stringify({
+            action: 'unsubscribe',
+            resources,
+          })
+        );
+      } catch (err: any) {
+        console.warn('[RealtimeService] Error sending unsubscription:', err.message);
+      }
+    }
   }
 
   /**
@@ -237,6 +283,19 @@ class RealtimeService {
   }
 
   /**
+   * Sends a lightweight proof-of-view pulse to keep market lease active on server
+   */
+  public pingMarketView(): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try {
+        this.ws.send(JSON.stringify({ action: 'market_ping' }));
+      } catch (err: any) {
+        console.warn('[RealtimeService] Error sending market ping:', err.message);
+      }
+    }
+  }
+
+  /**
    * Disconnects cleanly
    */
   public disconnect(): void {
@@ -256,4 +315,8 @@ class RealtimeService {
   }
 }
 
-export const realtimeService = new RealtimeService();
+const globalForRealtime = globalThis as unknown as { __bitmarket_realtime_service__?: RealtimeService };
+export const realtimeService =
+  globalForRealtime.__bitmarket_realtime_service__ ?? new RealtimeService();
+globalForRealtime.__bitmarket_realtime_service__ = realtimeService;
+

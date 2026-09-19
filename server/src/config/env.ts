@@ -19,6 +19,10 @@ export const config = {
     baseUrl: process.env.COINSTATS_BASE_URL || 'https://openapiv1.coinstats.app',
     timeoutMs: 10000,
   },
+  coinmarketcap: {
+    baseUrl: process.env.COINMARKETCAP_BASE_URL || 'https://pro-api.coinmarketcap.com/public-api/v1',
+    timeoutMs: 10000,
+  },
   redis: {
     url: process.env.REDIS_URL || 'redis://localhost:6379',
   },
@@ -26,9 +30,9 @@ export const config = {
     url: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/agregator',
   },
   cacheTtl: {
-    overview: parseInt(process.env.CACHE_TTL_OVERVIEW || '30', 10),
-    tokens: parseInt(process.env.CACHE_TTL_TOKENS || '30', 10),
-    price: parseInt(process.env.CACHE_TTL_PRICE || '15', 10),
+    overview: parseInt(process.env.CACHE_TTL_OVERVIEW || '7', 10),
+    tokens: parseInt(process.env.CACHE_TTL_TOKENS || '7', 10),
+    price: parseInt(process.env.CACHE_TTL_PRICE || '7', 10),
     chart: parseInt(process.env.CACHE_TTL_CHART || '300', 10),
     search: parseInt(process.env.CACHE_TTL_SEARCH || '60', 10),
     portfolio: parseInt(process.env.CACHE_TTL_PORTFOLIO || '30', 10),
@@ -42,6 +46,7 @@ export const config = {
     refreshMax: parseInt(process.env.RATE_LIMIT_REFRESH_MAX || '15', 10),
     mutationMax: parseInt(process.env.RATE_LIMIT_MUTATION_MAX || '30', 10),
   },
+  marketRefreshInterval: parseInt(process.env.MARKET_REFRESH_INTERVAL_SECONDS || '5', 10),
 };
 
 /**

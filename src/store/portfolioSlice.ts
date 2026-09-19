@@ -11,6 +11,7 @@ import {
 } from '../api/portfolioApi';
 import { getCoinStatsBlockchain } from '../utils/chainMapping';
 import { updateTokenPrices } from '../utils/tokenPricing';
+import { fetchMarketTokens } from './marketSlice';
 
 export interface PortfolioState {
   summary: PortfolioSummary | null;
@@ -280,7 +281,62 @@ export const portfolioSlice = createSlice({
       })
       .addCase(refreshPortfolio.rejected, (state) => {
         state.refreshing = false;
-      });
+      })
+
+    // Real-time market token price propagation to portfolio holdings
+    builder.addCase(fetchMarketTokens.fulfilled, (state, action) => {
+      const tokens = action.payload?.response?.tokens;
+      if (!tokens || !Array.isArray(tokens) || tokens.length === 0 || state.holdings.length === 0) {
+        return;
+      }
+
+      const tokenBySymbol = new Map(tokens.map((t) => [t.symbol.toUpperCase(), t]));
+      const tokenById = new Map(tokens.map((t) => [t.id.toLowerCase(), t]));
+      let hasChanges = false;
+
+      for (const h of state.holdings) {
+        const matched =
+          tokenById.get(h.coinId.toLowerCase()) ||
+          tokenBySymbol.get(h.symbol.toUpperCase());
+        if (matched && matched.priceUsd > 0 && matched.priceUsd !== h.priceUsd) {
+          h.priceUsd = matched.priceUsd;
+          h.valueUsd = Math.round(h.amount * h.priceUsd * 100) / 100;
+          h.change24hPercent = matched.change24hPercent;
+          hasChanges = true;
+        }
+      }
+
+      if (hasChanges && state.summary) {
+        const totalValueUsd = state.holdings.reduce((sum, h) => sum + (h.valueUsd || 0), 0);
+        let totalPriorValue = 0;
+
+        for (const h of state.holdings) {
+          if (h.valueUsd && h.valueUsd > 0) {
+            const changeFactor = 1 + (h.change24hPercent || 0) / 100;
+            const priorTokenVal = changeFactor > 0 ? h.valueUsd / changeFactor : h.valueUsd;
+            totalPriorValue += priorTokenVal;
+          }
+        }
+
+        const change24hUsd =
+          totalPriorValue > 0 ? Math.round((totalValueUsd - totalPriorValue) * 100) / 100 : 0;
+        const change24hPercent =
+          totalPriorValue > 0
+            ? Math.round(((totalValueUsd - totalPriorValue) / totalPriorValue) * 10000) / 100
+            : 0;
+
+        state.summary.totalValueUsd = Math.round(totalValueUsd * 100) / 100;
+        state.summary.change24hUsd = change24hUsd;
+        state.summary.change24hPercent = change24hPercent;
+
+        for (const h of state.holdings) {
+          h.allocationPercent =
+            state.summary.totalValueUsd > 0 && h.valueUsd !== null
+              ? Math.round((h.valueUsd / state.summary.totalValueUsd) * 10000) / 100
+              : 0;
+        }
+      }
+    });
   },
 });
 

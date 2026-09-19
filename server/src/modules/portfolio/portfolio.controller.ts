@@ -29,6 +29,21 @@ export class PortfolioController {
     } catch (err: any) {
       const status = err.response?.status || err.statusCode;
       if (status === 429 || status === 406) {
+        try {
+          const { chain, address } = extractParams(req);
+          const cachedData = await portfolioService.getPortfolio(chain, address, false);
+          if (cachedData && cachedData.holdings) {
+            res.json({
+              success: true,
+              data: cachedData,
+              warning: 'Data served from cached snapshot due to provider rate limiting.',
+            });
+            return;
+          }
+        } catch {
+          // Fall through to 429 response
+        }
+
         res.status(429).json({
           success: false,
           error: {

@@ -29,6 +29,8 @@ export interface MarketToken {
   contractAddresses?: ContractAddressInfo[];
   priceUpdatedAt: string;
   sparkline?: number[];
+  cmcId?: number;
+  tags?: string[];
 }
 
 export interface ChartPoint {

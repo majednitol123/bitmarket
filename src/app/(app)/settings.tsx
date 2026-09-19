@@ -8,13 +8,16 @@ import { authenticateBiometric, saveBiometricPreference, checkBiometricAvailabil
 import { Switch, Alert, View, TextInput, TouchableOpacity, Text, StyleSheet, Clipboard, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradientBackground } from "../../components/Styles/Gradient";
-import { setThemeMode, ThemeMode, setNotificationsEnabled, setDebugOverrideAddress } from "../../store/settingsSlice";
+import { setThemeMode, ThemeMode, setNotificationsEnabled, setDebugOverrideAddress, setDataUpdateInterval } from "../../store/settingsSlice";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as Notifications from "expo-notifications";
 import { notifyNotificationsToggled, getOrCreateDeviceIdAsync } from "../../services/notificationService";
 import { notificationApi } from "../../api/notificationApi";
 import { alertApi, PriceAlert } from "../../api/alertApi";
+import { marketApi } from "../../api/marketApi";
+import { realtimeService } from "../../services/realtimeService";
 import { useAccount } from "@reown/appkit-react-native";
+import { useFocusEffect } from "expo-router";
 import {
   BellIcon,
   ShieldCheckIcon,
@@ -28,6 +31,7 @@ import {
   TrashIcon,
   ArrowUpIcon,
   ArrowDownIcon,
+  RefreshCwIcon,
 } from "../../components/Icons/AppIcons";
 import Header from "../../components/Header/Header";
 
@@ -160,6 +164,14 @@ const TEST_WALLETS = [
   },
 ];
 
+const REFRESH_INTERVALS = [
+  { value: 5, label: "5s", badge: "Turbo", desc: "⚡ Ultra-fast 5s updates. Real-time ticker responsiveness." },
+  { value: 10, label: "10s", badge: "Fast", desc: "🚀 Fast 10s updates. Great for active market monitoring." },
+  { value: 15, label: "15s", badge: "Optimal", desc: "⭐ 15s updates. Best balance of live freshness & battery (Recommended)." },
+  { value: 30, label: "30s", badge: "Relaxed", desc: "🔋 Relaxed 30s updates. Smooth & battery-efficient." },
+  { value: 60, label: "60s", badge: "Saver", desc: "🌱 Low network mode. Updates once per minute." },
+];
+
 const SettingsIndex = () => {
   const theme = useTheme();
   const dispatch = useDispatch<AppDispatch>();
@@ -176,8 +188,18 @@ const SettingsIndex = () => {
   const debugOverrideAddress = useSelector(
     (state: RootState) => state.settings?.debugOverrideAddress ?? ""
   );
+  const dataUpdateInterval = useSelector(
+    (state: RootState) => state.settings?.dataUpdateInterval ?? 15
+  );
 
   const [localTestAddress, setLocalTestAddress] = useState(debugOverrideAddress);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Proactively unsubscribe from market topics whenever Settings screen is focused
+      realtimeService.unsubscribe(['market:tokens', 'market:overview']);
+    }, [])
+  );
 
   useEffect(() => {
     setLocalTestAddress(debugOverrideAddress);
@@ -535,6 +557,59 @@ const SettingsIndex = () => {
       color: theme.colors.grey,
       fontSize: 10,
       lineHeight: 15,
+    },
+    refreshSegmentContainer: {
+      flexDirection: "row",
+      backgroundColor: theme.colors.dark,
+      borderRadius: 12,
+      padding: 4,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      gap: 4,
+      marginTop: 4,
+    },
+    refreshSegmentBtn: {
+      flex: 1,
+      paddingVertical: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 8,
+      position: "relative",
+    },
+    refreshSegmentBtnActive: {
+      backgroundColor: theme.colors.primary,
+    },
+    refreshSegmentText: {
+      color: theme.colors.lightGrey,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    refreshSegmentTextActive: {
+      color: "#FFFFFF",
+      fontWeight: "700",
+    },
+    recommendedDot: {
+      position: "absolute",
+      top: 3,
+      right: 5,
+      width: 5,
+      height: 5,
+      borderRadius: 2.5,
+      backgroundColor: "#10B981",
+    },
+    refreshInfoBox: {
+      marginTop: 10,
+      backgroundColor: "rgba(124, 58, 237, 0.08)",
+      borderWidth: 1,
+      borderColor: "rgba(124, 58, 237, 0.2)",
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    refreshInfoText: {
+      color: theme.colors.lightGrey,
+      fontSize: 11,
+      lineHeight: 16,
     },
   });
 
@@ -971,6 +1046,70 @@ const SettingsIndex = () => {
                   <ThemeOptionText active={themeMode === "system"}>System</ThemeOptionText>
                 </ThemeOptionButton>
               </ThemeSelectorContainer>
+            </SettingsGroup>
+
+            {/* Data Refresh Rate Group */}
+            <SettingsGroup>
+              <GroupTitle>Data Refresh Rate</GroupTitle>
+              <SettingOptionCard activeOpacity={1}>
+                <OptionRow>
+                  <OptionLeft>
+                    <IconCircle>
+                      <RefreshCwIcon size={18} color={theme.colors.primary} />
+                    </IconCircle>
+                    <View style={{ flex: 1 }}>
+                      <OptionText>Live Data Update Interval</OptionText>
+                      <OptionSubtext>
+                        Frequency for refreshing live market prices & portfolio balances
+                      </OptionSubtext>
+                    </View>
+                  </OptionLeft>
+                </OptionRow>
+
+                <CardDivider />
+
+                {/* Segmented Button Row */}
+                <View style={debugStyles.refreshSegmentContainer}>
+                  {REFRESH_INTERVALS.map((item) => {
+                    const isActive = dataUpdateInterval === item.value;
+                    return (
+                      <TouchableOpacity
+                        key={item.value}
+                        style={[
+                          debugStyles.refreshSegmentBtn,
+                          isActive && debugStyles.refreshSegmentBtnActive,
+                        ]}
+                        onPress={() => {
+                          dispatch(setDataUpdateInterval(item.value));
+                          realtimeService.setUpdateInterval(item.value);
+                          marketApi.setUpdateInterval(item.value).catch(() => {});
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            debugStyles.refreshSegmentText,
+                            isActive && debugStyles.refreshSegmentTextActive,
+                          ]}
+                        >
+                          {item.label}
+                        </Text>
+                        {item.value === 15 && (
+                          <View style={debugStyles.recommendedDot} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Explanatory description card */}
+                <View style={debugStyles.refreshInfoBox}>
+                  <Text style={debugStyles.refreshInfoText}>
+                    {REFRESH_INTERVALS.find((i) => i.value === dataUpdateInterval)?.desc ||
+                      `Refreshes live data every ${dataUpdateInterval}s.`}
+                  </Text>
+                </View>
+              </SettingOptionCard>
             </SettingsGroup>
 
             {/* ═══ Developer / Testing: Portfolio Address Override ═══ */}

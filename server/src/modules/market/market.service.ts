@@ -1,5 +1,4 @@
-import { coinStatsProvider } from '../../providers/CoinStatsProvider';
-import { marketFallbackProvider } from '../../providers/MarketFallbackProvider';
+import { coinMarketCapProvider } from '../../providers/CoinMarketCapProvider';
 import { cacheService } from '../../cache/cacheService';
 import { cacheKeys } from '../../cache/cacheKeys';
 import { config } from '../../config/env';
@@ -19,60 +18,44 @@ import {
 
 export class MarketService {
   /**
-   * Get Market Overview with multi-provider fallback.
-   * Primary: CoinStats -> Secondary: CoinGecko fallback -> Stale Redis cache
+   * Get Market Overview exclusively from CoinMarketCap.
    */
   async getOverview(forceRefresh: boolean = false): Promise<MarketOverview> {
     const cacheKey = cacheKeys.marketOverview();
+    const ttlSeconds = config.cacheTtl.overview || 7;
+
     return cacheService.getOrFetch(
       cacheKey,
-      { freshSeconds: config.cacheTtl.overview, staleSeconds: config.cacheTtl.overview * 4 },
+      { freshSeconds: ttlSeconds, staleSeconds: ttlSeconds * 2 },
       async () => {
-        try {
-          return await coinStatsProvider.getMarketOverview();
-        } catch (err: any) {
-          console.warn(
-            `[MarketService] Primary CoinStats overview failed (${err.message}). Using MarketFallbackProvider...`
-          );
-          return await marketFallbackProvider.getMarketOverview();
-        }
+        return await coinMarketCapProvider.getMarketOverview();
       },
-      { forceRefresh, source: 'market_multi' }
+      { forceRefresh, source: 'cmc_overview' }
     );
   }
 
   /**
    * Shared Master Token List
-   * Retrieves and caches the master dataset of top 250 coins in Redis (`market:tokens:master`).
-   * Eliminates >80% of upstream API calls by deriving category slices and pagination in-memory.
+   * Exclusively retrieves and caches the master dataset from CoinMarketCap.
    */
   async getMasterTokenList(forceRefresh: boolean = false): Promise<MarketToken[]> {
     const cacheKey = cacheKeys.marketMasterTokens();
+    const ttlSeconds = config.cacheTtl.tokens || 7;
+
     return cacheService.getOrFetch(
       cacheKey,
-      { freshSeconds: config.cacheTtl.tokens, staleSeconds: config.cacheTtl.tokens * 4 },
+      { freshSeconds: ttlSeconds, staleSeconds: ttlSeconds * 2 },
       async () => {
-        try {
-          const res = await coinStatsProvider.getCoins({ page: 1, limit: 250 });
-          if (res && res.tokens && res.tokens.length > 0) {
-            return res.tokens;
-          }
-        } catch (err: any) {
-          console.warn(
-            `[MarketService] Primary CoinStats getCoins failed (${err.message}). Using MarketFallbackProvider...`
-          );
-        }
-
-        const fallbackRes = await marketFallbackProvider.getCoins({ page: 1, limit: 250 });
-        return fallbackRes.tokens;
+        const res = await coinMarketCapProvider.getCoins({ page: 1, limit: 100 });
+        return res?.tokens || [];
       },
-      { forceRefresh, source: 'market_master' }
+      { forceRefresh, source: 'cmc_master' }
     );
   }
 
   /**
    * Get Paginated Tokens by Category
-   * Slices categories (Top Gainers, Layer 1, Layer 2, DeFi, All) and pages from the shared master cache.
+   * Slices categories (Top Gainers, Layer 1, Layer 2, DeFi, All) and pages from the shared CMC cache.
    */
   async getTokens(
     page: number = 1,
@@ -91,15 +74,30 @@ export class MarketService {
         .sort((a, b) => b.change24hPercent - a.change24hPercent);
     } else if (category === CATEGORY_IDS.LAYER_1) {
       filtered = allTokens
-        .filter((t) => LAYER_1_COIN_IDS.has(t.id.toLowerCase()))
+        .filter(
+          (t) =>
+            LAYER_1_COIN_IDS.has(t.id.toLowerCase()) ||
+            LAYER_1_COIN_IDS.has(t.symbol.toLowerCase()) ||
+            t.tags?.includes('layer-1')
+        )
         .sort((a, b) => a.rank - b.rank);
     } else if (category === CATEGORY_IDS.LAYER_2) {
       filtered = allTokens
-        .filter((t) => LAYER_2_COIN_IDS.has(t.id.toLowerCase()))
+        .filter(
+          (t) =>
+            LAYER_2_COIN_IDS.has(t.id.toLowerCase()) ||
+            LAYER_2_COIN_IDS.has(t.symbol.toLowerCase()) ||
+            t.tags?.includes('layer-2')
+        )
         .sort((a, b) => a.rank - b.rank);
     } else if (category === CATEGORY_IDS.DEFI) {
       filtered = allTokens
-        .filter((t) => DEFI_COIN_IDS.has(t.id.toLowerCase()))
+        .filter(
+          (t) =>
+            DEFI_COIN_IDS.has(t.id.toLowerCase()) ||
+            DEFI_COIN_IDS.has(t.symbol.toLowerCase()) ||
+            t.tags?.includes('defi')
+        )
         .sort((a, b) => a.rank - b.rank);
     } else {
       // Default: 'all'
@@ -123,94 +121,80 @@ export class MarketService {
 
   /**
    * Get Token by ID or Symbol
-   * Fast-path: checks cached master token list. Fallback: upstream lookup.
+   * Fast-path: checks cached master token list. Fallback: CoinMarketCap query.
    */
   async getTokenById(coinId: string): Promise<MarketToken | null> {
     const cleanId = coinId.trim().toLowerCase();
 
-    // 1. Fast lookup from cached master list (if contract addresses are already present)
+    // 1. Fast lookup from cached master list
     try {
       const master = await this.getMasterTokenList(false);
       const found = master.find(
         (t) => t.id.toLowerCase() === cleanId || t.symbol.toLowerCase() === cleanId
       );
-      if (
-        found &&
-        (found.contractAddress || (found.contractAddresses && found.contractAddresses.length > 0))
-      ) {
+      if (found) {
         return found;
       }
     } catch {
-      // Continue to direct provider query
+      // Continue to direct CMC lookup
     }
 
-    // 2. Direct provider lookup with fallback
+    // 2. Direct CoinMarketCap lookup
     const cacheKey = cacheKeys.marketToken(cleanId);
-    return cacheService.getOrFetch(
-      cacheKey,
-      { freshSeconds: config.cacheTtl.price, staleSeconds: config.cacheTtl.price * 4 },
-      async () => {
-        try {
-          const token = await coinStatsProvider.getCoinById(cleanId);
-          if (token) return token;
-        } catch (err: any) {
-          console.warn(
-            `[MarketService] Primary CoinStats getCoinById failed for "${cleanId}" (${err.message}). Trying fallback...`
-          );
-        }
-        return await marketFallbackProvider.getCoinById(cleanId);
-      },
-      { source: 'market_token' }
-    );
-  }
-
-
-  async getTokenChart(coinId: string, period: string = '1w'): Promise<ChartResponse> {
-    const cleanId = coinId.trim().toLowerCase();
-    const cleanPeriod = period.trim().toLowerCase();
-    const cacheKey = cacheKeys.marketChart(cleanId, cleanPeriod);
+    const ttlSeconds = config.cacheTtl.price || 7;
 
     return cacheService.getOrFetch(
       cacheKey,
-      { freshSeconds: config.cacheTtl.chart, staleSeconds: config.cacheTtl.chart * 2 },
+      { freshSeconds: ttlSeconds, staleSeconds: ttlSeconds * 2 },
       async () => {
-        try {
-          const chart = await coinStatsProvider.getCoinChart(cleanId, cleanPeriod);
-          if (chart && chart.points && chart.points.length > 0) {
-            return chart;
-          }
-        } catch (err: any) {
-          console.warn(
-            `[MarketService] Primary CoinStats chart failed for "${cleanId}" (${err.message}). Trying fallback...`
-          );
-        }
-
-        try {
-          const fallbackChart = await marketFallbackProvider.getCoinChart(cleanId, cleanPeriod);
-          if (fallbackChart && fallbackChart.points && fallbackChart.points.length > 0) {
-            return fallbackChart;
-          }
-        } catch (fallbackErr: any) {
-          console.warn(
-            `[MarketService] Fallback chart failed for "${cleanId}" (${fallbackErr.message})`
-          );
-        }
-
-        // Strict real data rule: return empty points, never fabricate synthetic curves
-        return {
-          tokenId: cleanId,
-          period: cleanPeriod,
-          points: [],
-          updatedAt: new Date().toISOString(),
-        };
+        return await coinMarketCapProvider.getCoinById(cleanId);
       },
-      { source: 'market_chart' }
+      { source: 'cmc_token' }
     );
   }
 
   /**
-   * Search Tokens with Multi-Identity Resolution
-   * Resolves EVM contracts (`0x...`), Solana mint addresses, and symbols/names with ranking.
+   * Get Coin Chart
+   * Exclusively retrieves historical price points from CoinMarketCap.
+   */
+  async getTokenChart(coinId: string, period: string = '1w'): Promise<ChartResponse> {
+    const cleanId = coinId.trim().toLowerCase();
+    const cleanPeriod = period.trim().toLowerCase();
+    const cacheKey = cacheKeys.marketChart(cleanId, cleanPeriod);
+    const ttlSeconds = config.cacheTtl.chart || 300;
+
+    return cacheService.getOrFetch(
+      cacheKey,
+      { freshSeconds: ttlSeconds, staleSeconds: ttlSeconds * 2 },
+      async () => {
+        let cmcId: number | null = null;
+        try {
+          const master = await this.getMasterTokenList(false);
+          const found = master.find(
+            (t) =>
+              t.id.toLowerCase() === cleanId ||
+              t.symbol.toLowerCase() === cleanId ||
+              String(t.cmcId) === cleanId
+          );
+          if (found && found.cmcId) {
+            cmcId = found.cmcId;
+          }
+        } catch {
+          // continue
+        }
+
+        return await coinMarketCapProvider.getCoinChart(
+          cmcId ? String(cmcId) : cleanId,
+          cleanPeriod
+        );
+      },
+      { source: 'cmc_chart' }
+    );
+  }
+
+  /**
+   * Search Tokens
+   * Resolves EVM contracts, Solana mint addresses, and symbols/names exclusively via CoinMarketCap data.
    */
   async searchTokens(query: string): Promise<MarketToken[]> {
     const cleanQuery = query.trim().toLowerCase();
@@ -246,7 +230,7 @@ export class MarketService {
           if (matched.length > 0) return matched;
         }
 
-        // 3. Multi-Identity Symbol & Name Ranking
+        // 2. Symbol & Name Ranking from master list
         const exactSymbolMatches: MarketToken[] = [];
         const prefixSymbolMatches: MarketToken[] = [];
         const nameMatches: MarketToken[] = [];
@@ -266,45 +250,33 @@ export class MarketService {
 
         const localRanked = [...exactSymbolMatches, ...prefixSymbolMatches, ...nameMatches];
 
-        // If local search returns ample matches, return top 20 immediately
         if (localRanked.length >= 5) {
           return localRanked.slice(0, 20);
         }
 
-        // 4. Fallback/Supplement with provider search for obscure or unindexed tokens
+        // 3. Fallback to CoinMarketCap search
         try {
-          const providerMatches = await coinStatsProvider.searchCoins(cleanQuery);
+          const cmcMatches = await coinMarketCapProvider.searchCoins(cleanQuery);
           const seenIds = new Set(localRanked.map((t) => t.id));
-          for (const pm of providerMatches) {
-            if (!seenIds.has(pm.id)) {
-              seenIds.add(pm.id);
-              localRanked.push(pm);
+          for (const cm of cmcMatches) {
+            if (!seenIds.has(cm.id)) {
+              seenIds.add(cm.id);
+              localRanked.push(cm);
             }
           }
-        } catch (err: any) {
-          try {
-            const fbMatches = await marketFallbackProvider.searchCoins(cleanQuery);
-            const seenIds = new Set(localRanked.map((t) => t.id));
-            for (const fm of fbMatches) {
-              if (!seenIds.has(fm.id)) {
-                seenIds.add(fm.id);
-                localRanked.push(fm);
-              }
-            }
-          } catch {
-            // Ignore fallback search error
-          }
+        } catch {
+          // Ignore
         }
 
         return localRanked.slice(0, 20);
       },
-      { source: 'market_search' }
+      { source: 'cmc_search' }
     );
   }
 
   /**
    * Get Top Gainers
-   * Derived from the shared master token list.
+   * Derived exclusively from CoinMarketCap master token list.
    */
   async getGainers(limit: number = 20): Promise<MarketToken[]> {
     const tokens = await this.getMasterTokenList(false);

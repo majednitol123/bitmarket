@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Image } from 'expo-image';
-import { View, Text } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 interface BlockchainIconProps {
@@ -9,9 +9,8 @@ interface BlockchainIconProps {
   chainId?: number | string;
   chainName?: string;
   logoUrl?: string;
+  style?: ViewStyle;
 }
-
-// Map modern L2s to Trust Wallet asset IDs
 
 // Generates a nice deterministic gradient color based on the symbol string
 const getGradientColors = (text: string): [string, string] => {
@@ -24,6 +23,8 @@ const getGradientColors = (text: string): [string, string] => {
     ['#FF338D', '#FF1A57'], // Pink
     ['#33FFF0', '#1AFFD8'], // Teal
     ['#FFD133', '#FFA81A'], // Yellow
+    ['#8B5CF6', '#6366F1'], // Indigo-Purple
+    ['#EC4899', '#F43F5E'], // Rose
   ];
   return gradients[code % gradients.length];
 };
@@ -33,43 +34,52 @@ export const BlockchainIcon: React.FC<BlockchainIconProps> = ({
   size = 32, 
   chainId, 
   chainName,
-  logoUrl
+  logoUrl,
+  style,
 }) => {
-  const [error, setError] = useState(false);
+  // Stages: 0 = primary (logoUrl if available), 1 = TrustWallet / Chain icon, 2 = SpotHQ, 3 = Gradient monogram
+  const initialStage = logoUrl && logoUrl.trim() !== '' ? 0 : 1;
+  const [stage, setStage] = useState<number>(initialStage);
 
-  React.useEffect(() => {
-    setError(false);
+  useEffect(() => {
+    setStage(logoUrl && logoUrl.trim() !== '' ? 0 : 1);
   }, [logoUrl, symbol]);
 
   const name = (chainName || '').toLowerCase();
   const lowerSymbol = (symbol || '').toLowerCase();
   const id = Number(chainId);
 
-  // 0. Check custom logoUrl if provided
-  if (logoUrl && !error) {
-    return (
-      <Image
-        source={logoUrl}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
-        contentFit="contain"
-        cachePolicy="disk"
-        onError={() => setError(true)}
-      />
-    );
-  }
-
-  // 1. Check custom override for SecureChain
+  // 1. Check custom local override for SecureChain
   if (name.includes('securechain') || lowerSymbol === 'scai' || id === 34 || id === 3434) {
     return (
-      <Image
-        source={require('../../assets/svg/securechain.jpeg')}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
-        contentFit="contain"
-      />
+      <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }, style]}>
+        <Image
+          source={require('../../assets/svg/securechain.jpeg')}
+          style={{ width: size, height: size, borderRadius: size / 2 }}
+          contentFit="contain"
+          transition={150}
+        />
+      </View>
     );
   }
 
-  // 2. Identify Trust Wallet identifier key
+  // Stage 0: Explicit logoUrl (e.g. CoinMarketCap 128x128 CDN)
+  if (stage === 0 && logoUrl) {
+    return (
+      <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }, style]}>
+        <Image
+          source={{ uri: logoUrl }}
+          style={{ width: size, height: size, borderRadius: size / 2 }}
+          contentFit="contain"
+          cachePolicy="disk"
+          transition={200}
+          onError={() => setStage(1)}
+        />
+      </View>
+    );
+  }
+
+  // Identify Trust Wallet identifier key
   let trustWalletKey = '';
   if (name.includes('base') || id === 8453 || id === 84532) trustWalletKey = 'base';
   else if (name.includes('scroll') || id === 534352 || id === 534351) trustWalletKey = 'scroll';
@@ -85,55 +95,80 @@ export const BlockchainIcon: React.FC<BlockchainIconProps> = ({
   else if (lowerSymbol === 'sol' || lowerSymbol === 'solana') trustWalletKey = 'solana';
   else if (lowerSymbol === 'btc' || lowerSymbol === 'bitcoin') trustWalletKey = 'bitcoin';
 
-  // 3. Fallback to dynamic github hosted icon URL or gradient fallback if error occurs
-  const dynamicIconUrl = trustWalletKey 
-    ? `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${trustWalletKey}/info/logo.png`
-    : `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${lowerSymbol}.png`;
-
-  if (!error && dynamicIconUrl) {
+  // Stage 1: TrustWallet CDN
+  if (stage <= 1 && trustWalletKey) {
+    const twUrl = `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${trustWalletKey}/info/logo.png`;
     return (
-      <Image
-        source={dynamicIconUrl}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
-        contentFit="contain"
-        cachePolicy="disk"
-        onError={() => setError(true)}
-      />
+      <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }, style]}>
+        <Image
+          source={{ uri: twUrl }}
+          style={{ width: size, height: size, borderRadius: size / 2 }}
+          contentFit="contain"
+          cachePolicy="disk"
+          transition={200}
+          onError={() => setStage(2)}
+        />
+      </View>
     );
   }
 
-  // Premium linear gradient fallback showing uppercase first character
-  const gradientColors = getGradientColors(lowerSymbol);
+  // Stage 2: SpotHQ crypto icon repository
+  if (stage <= 2 && lowerSymbol) {
+    const spotHqUrl = `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${lowerSymbol}.png`;
+    return (
+      <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }, style]}>
+        <Image
+          source={{ uri: spotHqUrl }}
+          style={{ width: size, height: size, borderRadius: size / 2 }}
+          contentFit="contain"
+          cachePolicy="disk"
+          transition={200}
+          onError={() => setStage(3)}
+        />
+      </View>
+    );
+  }
+
+  // Stage 3: Premium linear gradient fallback with uppercase initials
+  const gradientColors = getGradientColors(lowerSymbol || symbol);
   const initials = (symbol || '?').substring(0, 2).toUpperCase();
 
   return (
-    <LinearGradient
-      colors={gradientColors}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        alignItems: 'center',
-        justifyContent: 'center',
-        elevation: 1,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.15,
-        shadowRadius: 1.5,
-      }}
-    >
-      <Text 
-        style={{ 
-          color: '#FFFFFF', 
-          fontWeight: 'bold', 
-          fontSize: size * 0.42,
-          letterSpacing: -0.5
+    <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }, style]}>
+      <LinearGradient
+        colors={gradientColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
-        {initials}
-      </Text>
-    </LinearGradient>
+        <Text 
+          style={{ 
+            color: '#FFFFFF', 
+            fontWeight: '700', 
+            fontSize: size * 0.42,
+            letterSpacing: -0.5
+          }}
+        >
+          {initials}
+        </Text>
+      </LinearGradient>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
