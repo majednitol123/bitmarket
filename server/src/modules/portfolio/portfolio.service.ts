@@ -23,6 +23,7 @@ import {
 import { portfolioCacheKeys, invalidatePortfolioCache } from './portfolio.cache';
 import { snapshotService } from './snapshot.service';
 import { swapHistoryService } from './swapHistory.service';
+import { normalizeChain as normalizeChainUtil } from '../../utils/chainNormalization';
 
 interface KnownTokenConfig {
   symbol: string;
@@ -94,11 +95,122 @@ const TOP_EVM_TOKENS: Record<string, KnownTokenConfig[]> = {
       logoUrl: 'https://static.coinstats.app/coins/1650455629727.png',
     },
   ],
+  bsc: [
+    {
+      symbol: 'USDT',
+      name: 'Tether',
+      contract: '0x55d398326f99059ff775485246999027b3197955',
+      decimals: 18,
+      coinId: 'tether',
+      logoUrl: 'https://static.coinstats.app/coins/1650455771843.png',
+    },
+    {
+      symbol: 'USDC',
+      name: 'USD Coin',
+      contract: '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d',
+      decimals: 18,
+      coinId: 'usd-coin',
+      logoUrl: 'https://static.coinstats.app/coins/1650455771565.png',
+    },
+    {
+      symbol: 'WBNB',
+      name: 'Wrapped BNB',
+      contract: '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',
+      decimals: 18,
+      coinId: 'binancecoin',
+      logoUrl: 'https://static.coinstats.app/coins/1650455771843.png',
+    },
+  ],
+  arbitrum: [
+    {
+      symbol: 'USDT',
+      name: 'Tether',
+      contract: '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9',
+      decimals: 6,
+      coinId: 'tether',
+      logoUrl: 'https://static.coinstats.app/coins/1650455771843.png',
+    },
+    {
+      symbol: 'USDC',
+      name: 'USD Coin',
+      contract: '0xaf88d065e77c8cc2239327c5edb3a432268e5831',
+      decimals: 6,
+      coinId: 'usd-coin',
+      logoUrl: 'https://static.coinstats.app/coins/1650455771565.png',
+    },
+    {
+      symbol: 'WETH',
+      name: 'Wrapped Ether',
+      contract: '0x82af49447d8a07e3bd95bd0d56f35241523fbab1',
+      decimals: 18,
+      coinId: 'weth',
+      logoUrl: 'https://static.coinstats.app/coins/1650455629727.png',
+    },
+    {
+      symbol: 'ARB',
+      name: 'Arbitrum',
+      contract: '0x912ce59144191c1204e64559fe8253a0e49e6548',
+      decimals: 18,
+      coinId: 'arbitrum',
+      logoUrl: 'https://static.coinstats.app/coins/1680164627192.png',
+    },
+  ],
+  optimism: [
+    {
+      symbol: 'USDC',
+      name: 'USD Coin',
+      contract: '0x0b2c639c533813f4aa9d7837caf62653d097ff85',
+      decimals: 6,
+      coinId: 'usd-coin',
+      logoUrl: 'https://static.coinstats.app/coins/1650455771565.png',
+    },
+    {
+      symbol: 'USDT',
+      name: 'Tether',
+      contract: '0x94b008aa00579c1307b0ef2c499ad98a8ce58e58',
+      decimals: 6,
+      coinId: 'tether',
+      logoUrl: 'https://static.coinstats.app/coins/1650455771843.png',
+    },
+    {
+      symbol: 'WETH',
+      name: 'Wrapped Ether',
+      contract: '0x4200000000000000000000000000000000000006',
+      decimals: 18,
+      coinId: 'weth',
+      logoUrl: 'https://static.coinstats.app/coins/1650455629727.png',
+    },
+  ],
+  base: [
+    {
+      symbol: 'USDC',
+      name: 'USD Coin',
+      contract: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+      decimals: 6,
+      coinId: 'usd-coin',
+      logoUrl: 'https://static.coinstats.app/coins/1650455771565.png',
+    },
+    {
+      symbol: 'WETH',
+      name: 'Wrapped Ether',
+      contract: '0x4200000000000000000000000000000000000006',
+      decimals: 18,
+      coinId: 'weth',
+      logoUrl: 'https://static.coinstats.app/coins/1650455629727.png',
+    },
+  ],
 };
 
 export class PortfolioService {
+  /**
+   * Normalizes chain input (IDs, variations, aliases) to canonical CoinStats/RPC names.
+   */
+  public normalizeChain(chain: string): string {
+    return normalizeChainUtil(chain);
+  }
+
   private cleanAddress(chain: string, address: string): string {
-    const normChain = chain.toLowerCase();
+    const normChain = this.normalizeChain(chain);
     return normChain === 'solana' ? address.trim() : address.trim().toLowerCase();
   }
 
@@ -112,8 +224,9 @@ export class PortfolioService {
     holdings: PortfolioHolding[],
     summary: PortfolioSummary
   ): Promise<void> {
-    const evmChains = ['ethereum', 'eth', 'polygon', 'matic', 'pol', 'arbitrum', 'arb', 'optimism', 'opt', 'base', 'bsc', 'binance'];
-    if (!evmChains.includes(chain.toLowerCase())) {
+    const normChain = this.normalizeChain(chain);
+    const evmChains = ['ethereum', 'eth', 'polygon', 'matic', 'pol', 'arbitrum', 'arb', 'optimism', 'opt', 'base', 'bsc', 'binance', 'avalanche', 'fantom'];
+    if (!evmChains.includes(normChain)) {
       return;
     }
 
@@ -123,19 +236,25 @@ export class PortfolioService {
     }
 
     try {
-      const rpcBal = await blockchainRpcProvider.getNativeBalance(chain, address);
+      const rpcBal = await blockchainRpcProvider.getNativeBalance(normChain, address);
       const amount = parseFloat(rpcBal.formattedEther);
       if (amount > 0.000001) {
         let price = 0;
         let coinId = 'ethereum';
         let logoUrl = 'https://static.coinstats.app/coins/1650455629555.png';
 
-        if (chain === 'polygon' || chain === 'matic' || chain === 'pol') {
+        if (normChain === 'polygon' || normChain === 'matic' || normChain === 'pol') {
           coinId = 'matic-network';
           logoUrl = 'https://static.coinstats.app/coins/1650455648842.png';
-        } else if (chain === 'bsc' || chain === 'binance') {
+        } else if (normChain === 'bsc' || normChain === 'binance') {
           coinId = 'binancecoin';
           logoUrl = 'https://static.coinstats.app/coins/1650455771843.png';
+        } else if (normChain === 'avalanche') {
+          coinId = 'avalanche-2';
+          logoUrl = 'https://static.coinstats.app/coins/1650455703816.png';
+        } else if (normChain === 'fantom') {
+          coinId = 'fantom';
+          logoUrl = 'https://static.coinstats.app/coins/1650455703816.png';
         }
 
         try {
@@ -156,8 +275,8 @@ export class PortfolioService {
           nativeHolding.valueUsd = valueUsd;
         } else {
           holdings.unshift({
-            id: `${chain}:native`,
-            chain,
+            id: `${normChain}:native`,
+            chain: normChain,
             coinId,
             symbol: rpcBal.symbol,
             name: rpcBal.chain,
@@ -183,7 +302,7 @@ export class PortfolioService {
         }
       }
     } catch (err: any) {
-      console.warn(`[PortfolioService] On-chain RPC balance verification failed (${chain}:${address}):`, err.message);
+      console.warn(`[PortfolioService] On-chain RPC balance verification failed (${normChain}:${address}):`, err.message);
     }
   }
 
@@ -197,7 +316,8 @@ export class PortfolioService {
     holdings: PortfolioHolding[],
     summary: PortfolioSummary
   ): Promise<void> {
-    const chainTokens = TOP_EVM_TOKENS[chain.toLowerCase()];
+    const normChain = this.normalizeChain(chain);
+    const chainTokens = TOP_EVM_TOKENS[normChain];
     if (!chainTokens || chainTokens.length === 0) return;
 
     const existingContracts = new Set(
@@ -211,7 +331,7 @@ export class PortfolioService {
 
       try {
         const bal = await blockchainRpcProvider.getTokenBalance(
-          chain,
+          normChain,
           tokenConfig.contract,
           address,
           tokenConfig.decimals
@@ -231,8 +351,8 @@ export class PortfolioService {
           const valueUsd = price > 0 ? Math.round(amount * price * 100) / 100 : null;
 
           holdings.push({
-            id: `${chain}:${tokenConfig.contract}`,
-            chain,
+            id: `${normChain}:${tokenConfig.contract}`,
+            chain: normChain,
             coinId: tokenConfig.coinId,
             symbol: tokenConfig.symbol,
             name: tokenConfig.name,
@@ -262,7 +382,7 @@ export class PortfolioService {
     address: string,
     forceRefresh: boolean = false
   ): Promise<NormalizedPortfolioResponse> {
-    const normChain = chain.toLowerCase();
+    const normChain = this.normalizeChain(chain);
     const targetAddress = this.cleanAddress(normChain, address);
     const cacheKey = portfolioCacheKeys.portfolio(normChain, targetAddress);
 
@@ -404,7 +524,7 @@ export class PortfolioService {
     page: number = 1,
     limit: number = 20
   ): Promise<PaginatedPortfolioTransactions> {
-    const normChain = chain.toLowerCase();
+    const normChain = this.normalizeChain(chain);
     const targetAddress = this.cleanAddress(normChain, address);
     const cacheKey = portfolioCacheKeys.transactions(normChain, targetAddress, page, limit);
 
@@ -460,7 +580,7 @@ export class PortfolioService {
     address: string,
     timeframe: string = '1D'
   ): Promise<PortfolioChartData> {
-    const normChain = chain.toLowerCase();
+    const normChain = this.normalizeChain(chain);
     const targetAddress = this.cleanAddress(normChain, address);
     const upperTf = timeframe.toUpperCase();
     const cacheKey = portfolioCacheKeys.chart(normChain, targetAddress, upperTf);
@@ -547,7 +667,12 @@ export class PortfolioService {
 
           // If top holdings charts were unavailable (e.g. unknown contract IDs), try native chain token
           if (validResults.length === 0) {
-            const nativeAsset = normChain === 'solana' ? 'solana' : 'ethereum';
+            const nativeAsset =
+              normChain === 'solana' ? 'solana' :
+              normChain === 'bsc' ? 'binancecoin' :
+              normChain === 'polygon' ? 'matic-network' :
+              normChain === 'avalanche' ? 'avalanche-2' :
+              'ethereum';
             try {
               const nativeChart = await marketService.getTokenChart(nativeAsset, period);
               if (nativeChart && nativeChart.points && nativeChart.points.length > 0) {
@@ -644,7 +769,8 @@ export class PortfolioService {
    * Retrieves DeFi positions
    */
   async getDefi(chain: string, address: string): Promise<DeFiPosition[]> {
-    const portfolio = await this.getPortfolio(chain, address);
+    const normChain = this.normalizeChain(chain);
+    const portfolio = await this.getPortfolio(normChain, address);
     return portfolio.defi || [];
   }
 
@@ -657,14 +783,15 @@ export class PortfolioService {
     address: string,
     limit: number = 20
   ): Promise<PortfolioTransaction[]> {
+    const normChain = this.normalizeChain(chain);
     const alchemyKey = process.env.ALCHEMY_API_KEY || process.env.EXPO_PUBLIC_ALCHEMY_API_KEY;
     if (!alchemyKey) return [];
 
     let network = 'eth-mainnet';
-    if (chain === 'polygon') network = 'polygon-mainnet';
-    else if (chain === 'arbitrum' || chain === 'arb') network = 'arb-mainnet';
-    else if (chain === 'optimism' || chain === 'opt') network = 'opt-mainnet';
-    else if (chain === 'base') network = 'base-mainnet';
+    if (normChain === 'polygon') network = 'polygon-mainnet';
+    else if (normChain === 'arbitrum' || normChain === 'arb') network = 'arb-mainnet';
+    else if (normChain === 'optimism' || normChain === 'opt') network = 'opt-mainnet';
+    else if (normChain === 'base') network = 'base-mainnet';
 
     const hexLimit = '0x' + Math.min(100, Math.max(1, limit)).toString(16);
 
@@ -753,7 +880,8 @@ export class PortfolioService {
     page: number = 1,
     limit: number = 20
   ): Promise<{ items: SwapTransactionRecord[]; meta: { page: number; limit: number; hasMore: boolean } }> {
-    return swapHistoryService.getSwapHistory(chain, address, page, limit);
+    const normChain = this.normalizeChain(chain);
+    return swapHistoryService.getSwapHistory(normChain, address, page, limit);
   }
 
   /**
@@ -764,14 +892,16 @@ export class PortfolioService {
     address: string,
     swapData: Partial<SwapTransactionRecord>
   ): Promise<SwapTransactionRecord | null> {
-    return swapHistoryService.recordSwap(chain, address, swapData);
+    const normChain = this.normalizeChain(chain);
+    return swapHistoryService.recordSwap(normChain, address, swapData);
   }
 
   /**
    * Invalidates cached portfolio data
    */
   async invalidateCache(chain: string, address: string): Promise<void> {
-    await invalidatePortfolioCache(chain, address);
+    const normChain = this.normalizeChain(chain);
+    await invalidatePortfolioCache(normChain, address);
   }
 }
 

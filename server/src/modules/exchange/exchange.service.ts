@@ -15,6 +15,7 @@ import { cacheKeys } from '../../cache/cacheKeys';
 import { getDbPool, isDatabaseConnected } from '../../config/database';
 import { invalidatePortfolioCache } from '../portfolio/portfolio.cache';
 import { blockchainRpcProvider } from '../../providers/BlockchainRpcProvider';
+import { normalizeChain } from '../../utils/chainNormalization';
 
 export class ExchangeService {
   /**
@@ -57,7 +58,7 @@ export class ExchangeService {
 
     const cleanHash = params.txHash.trim();
     const cleanAddress = params.walletAddress.trim();
-    const chain = params.chain || 'ethereum';
+    const chain = normalizeChain(params.chain || 'ethereum');
 
     // 1. Record swap in durable database with idempotency guarantee
     const recorded = await swapHistoryService.recordSwap(

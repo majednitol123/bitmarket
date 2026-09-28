@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -55,6 +55,7 @@ import {
   selectPortfolioStatus,
   selectPortfolioRefreshing,
   selectPortfolioSelectedTimeframe,
+  selectPortfolioSelectedChain,
   selectPortfolioError,
   selectPortfolioHistoryStatus,
   selectPortfolioTransactionsStatus,
@@ -104,8 +105,13 @@ export default function PortfolioScreen() {
   const portfolioError = useSelector(selectPortfolioError);
   const historyStatus = useSelector(selectPortfolioHistoryStatus);
   const transactionsStatus = useSelector(selectPortfolioTransactionsStatus);
+  const reduxSelectedChainId = useSelector(selectPortfolioSelectedChain);
+  const internalChainId = useSelector((state: RootState) => state.ethereum?.activeChainId);
 
-  const [selectedChainState, setSelectedChainState] = useState<Chain>(CHAINS[0]);
+  const [selectedChainState, setSelectedChainState] = useState<Chain>(() => {
+    const targetId = reduxSelectedChainId || internalChainId;
+    return CHAINS.find((c) => String(c.id) === String(targetId)) || CHAINS[0];
+  });
   const [chainModalVisible, setChainModalVisible] = useState(false);
   const [scrubPoint, setScrubPoint] = useState<{ time: string; value: number } | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("tokens");
@@ -116,7 +122,7 @@ export default function PortfolioScreen() {
   // Phase 1 (immediate): Portfolio summary + holdings
   useEffect(() => {
     if (activeAddress) {
-      dispatch(fetchPortfolio({ chain: selectedChainState.id, address: activeAddress }));
+      dispatch(fetchPortfolio({ chain: selectedChainState.id, address: activeAddress, forceRefresh: true }));
     }
   }, [dispatch, activeAddress, selectedChainState.id]);
 
@@ -212,7 +218,12 @@ export default function PortfolioScreen() {
     router.replace("/(app)");
   };
 
-  const handleSelectChain = (chain: Chain) => {
+  const handleSelectChain = useCallback((chain: Chain) => {
+    if (chain.id === selectedChainState.id) {
+      setChainModalVisible(false);
+      return;
+    }
+
     // 1. Immediately wipe previous chain state to prevent showing stale data
     dispatch(clearPortfolioData());
     setScrubPoint(null);
@@ -221,25 +232,19 @@ export default function PortfolioScreen() {
     setSelectedChainState(chain);
     dispatch(setSelectedChain(chain.id));
     setChainModalVisible(false);
+  }, [dispatch, selectedChainState.id]);
 
-    // 2. Fetch fresh portfolio data and chart for new network
-    // Swap history and transactions are NOT fetched until user taps the Swap History tab!
-    if (activeAddress) {
-      dispatch(fetchPortfolio({ chain: chain.id, address: activeAddress, forceRefresh: true }));
-      dispatch(fetchPortfolioChart({ chain: chain.id, address: activeAddress, range: reduxTimeframe }));
-    }
-  };
-
-  // Sync chain automatically if internal wallet activeChainId changes
-  const internalChainId = useSelector((state: RootState) => state.ethereum?.activeChainId);
+  // Sync chain automatically ONLY if internal wallet activeChainId changes externally in wallet settings
+  const prevInternalChainIdRef = useRef(internalChainId);
   useEffect(() => {
-    if (internalChainId) {
+    if (internalChainId && internalChainId !== prevInternalChainIdRef.current) {
+      prevInternalChainIdRef.current = internalChainId;
       const match = CHAINS.find((c) => String(c.id) === String(internalChainId));
       if (match && match.id !== selectedChainState.id) {
         handleSelectChain(match);
       }
     }
-  }, [internalChainId, selectedChainState.id]);
+  }, [internalChainId, handleSelectChain, selectedChainState.id]);
 
   const handleSelectTimeframe = (tf: Timeframe) => {
     dispatch(setSelectedTimeframe(tf));
@@ -288,7 +293,7 @@ export default function PortfolioScreen() {
       hash: s.txHash ? `${s.txHash.slice(0, 6)}...${s.txHash.slice(-4)}` : "",
       status: s.status === "completed" ? "Completed" : s.status === "failed" ? "Failed" : "Pending",
       isSwap: true,
-      explorerUrl: getChainExplorerTxUrl(s.chain || selectedChainState.id, s.txHash),
+      explorerUrl: getChainExplorerTxUrl(selectedChainState.id, s.txHash),
     }));
 
     const txItems = transactions.items.map((t) => ({
@@ -299,7 +304,7 @@ export default function PortfolioScreen() {
       hash: t.hash ? `${t.hash.slice(0, 6)}...${t.hash.slice(-4)}` : "",
       status: "Completed",
       isSwap: t.type === "swap",
-      explorerUrl: t.explorerUrl || getChainExplorerTxUrl(selectedChainState.id, t.hash),
+      explorerUrl: getChainExplorerTxUrl(selectedChainState.id, t.hash),
     }));
 
     return [...swapItems, ...txItems];

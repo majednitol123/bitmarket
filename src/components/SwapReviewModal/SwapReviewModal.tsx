@@ -253,7 +253,7 @@ export const SwapReviewModal: React.FC<SwapReviewModalProps> = ({
         swapId: buildData.swapId,
         txHash: realTxHash,
         walletAddress: address,
-        chain: chain.name,
+        chain: chain.id,
         chainId: Number(chain.id) || 1,
         fromTokenAddress: fromToken?.address,
         fromTokenSymbol: fromSymbol,

@@ -1,13 +1,14 @@
 import { getDbPool, isDatabaseConnected } from '../../config/database';
 import { SwapTransactionRecord } from './portfolio.types';
 import { invalidatePortfolioCache } from './portfolio.cache';
+import { normalizeChain } from '../../utils/chainNormalization';
 
 export class SwapHistoryService {
   private async getOrCreateWalletId(chain: string, address: string): Promise<number | null> {
     const pool = getDbPool();
     if (!pool || !isDatabaseConnected()) return null;
 
-    const normChain = chain.toLowerCase();
+    const normChain = normalizeChain(chain);
     const normAddress = address.toLowerCase();
 
     try {
@@ -45,7 +46,7 @@ export class SwapHistoryService {
       const walletId = await this.getOrCreateWalletId(chain, address);
       if (!walletId) return null;
 
-      const normChain = chain.toLowerCase();
+      const normChain = normalizeChain(chain);
       const txHash = data.txHash?.trim() || '';
 
       // 1. Idempotency Check via idempotency_key
@@ -127,18 +128,19 @@ export class SwapHistoryService {
 
     try {
       const offset = (page - 1) * limit;
-      const normChain = chain.toLowerCase();
+      const normChain = normalizeChain(chain);
       const query = `
         SELECT s.*
         FROM swap_transactions s
         JOIN wallets w ON s.wallet_id = w.id
         WHERE (
           LOWER(w.chain) = $1 OR LOWER(s.chain) = $1
-          OR ($1 = 'binance_smart' AND (LOWER(s.chain) IN ('56', 'binance-smart-chain', 'bsc') OR LOWER(w.chain) IN ('56', 'binance-smart-chain', 'bsc')))
-          OR ($1 = 'polygon-pos' AND (LOWER(s.chain) IN ('137', 'polygon', 'matic') OR LOWER(w.chain) IN ('137', 'polygon', 'matic')))
-          OR ($1 = 'arbitrum-one' AND (LOWER(s.chain) IN ('42161', 'arbitrum') OR LOWER(w.chain) IN ('42161', 'arbitrum')))
-          OR ($1 = 'optimistic-ethereum' AND (LOWER(s.chain) IN ('10', 'optimism') OR LOWER(w.chain) IN ('10', 'optimism')))
-          OR ($1 = 'ethereum' AND (LOWER(s.chain) = '1' OR LOWER(w.chain) = '1'))
+          OR ($1 IN ('bsc', 'binance_smart') AND (LOWER(s.chain) IN ('56', 'binance-smart-chain', 'binance_smart', 'binance', 'bsc', 'bnb chain', 'bnb') OR LOWER(w.chain) IN ('56', 'binance-smart-chain', 'binance_smart', 'binance', 'bsc', 'bnb chain', 'bnb')))
+          OR ($1 IN ('polygon', 'polygon-pos') AND (LOWER(s.chain) IN ('137', 'polygon', 'matic', 'pol', 'polygon-pos') OR LOWER(w.chain) IN ('137', 'polygon', 'matic', 'pol', 'polygon-pos')))
+          OR ($1 IN ('arbitrum', 'arbitrum-one') AND (LOWER(s.chain) IN ('42161', 'arbitrum', 'arb', 'arbitrum-one') OR LOWER(w.chain) IN ('42161', 'arbitrum', 'arb', 'arbitrum-one')))
+          OR ($1 IN ('optimism', 'optimistic-ethereum') AND (LOWER(s.chain) IN ('10', 'optimism', 'opt', 'optimistic-ethereum') OR LOWER(w.chain) IN ('10', 'optimism', 'opt', 'optimistic-ethereum')))
+          OR ($1 = 'ethereum' AND (LOWER(s.chain) IN ('1', 'eth', 'ethereum') OR LOWER(w.chain) IN ('1', 'eth', 'ethereum')))
+          OR ($1 = 'base' AND (LOWER(s.chain) IN ('8453', 'base') OR LOWER(w.chain) IN ('8453', 'base')))
         ) AND LOWER(w.address) = $2
         ORDER BY s.created_at DESC
         LIMIT $3 OFFSET $4

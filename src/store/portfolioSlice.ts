@@ -172,8 +172,8 @@ export const portfolioSlice = createSlice({
       state.walletAddress = null;
       state.status = 'loading';
       state.chartStatus = 'loading';
-      state.transactionsStatus = 'loading';
-      state.historyStatus = 'loading';
+      state.transactionsStatus = 'idle';
+      state.historyStatus = 'idle';
       state.error = null;
     },
   },
