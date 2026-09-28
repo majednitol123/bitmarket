@@ -353,14 +353,8 @@ export class PortfolioService {
           });
         }
 
-        // 6. Fetch DeFi protocol investments
-        let defi: DeFiPosition[] = [];
-        try {
-          const rawDefi = await coinStatsProvider.getWalletDefi(normChain, targetAddress);
-          defi = mapCoinStatsDefi(normChain, rawDefi, holdings);
-        } catch (err: any) {
-          defi = mapCoinStatsDefi(normChain, null, holdings);
-        }
+        // 6. DeFi positions (disabled to prevent third-party provider credit consumption)
+        const defi: DeFiPosition[] = [];
 
         return {
           wallet: {

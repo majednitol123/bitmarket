@@ -385,4 +385,7 @@ export const selectPortfolioError = (state: { portfolio: PortfolioState }) =>
 export const selectPortfolioHistoryStatus = (state: { portfolio: PortfolioState }) =>
   state.portfolio.historyStatus;
 
+export const selectPortfolioTransactionsStatus = (state: { portfolio: PortfolioState }) =>
+  state.portfolio.transactionsStatus;
+
 export default portfolioSlice.reducer;

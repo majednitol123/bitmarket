@@ -33,7 +33,6 @@ import {
 import {
   SwapIcon,
   CoinsIcon,
-  YieldIcon,
   HistoryIcon,
   RefreshCwIcon,
 } from "../../components/Icons/AppIcons";
@@ -53,18 +52,18 @@ import {
   selectPortfolioChartData,
   selectPortfolioTransactions,
   selectSwapHistory,
-  selectPortfolioDefi,
   selectPortfolioStatus,
   selectPortfolioRefreshing,
   selectPortfolioSelectedTimeframe,
   selectPortfolioError,
   selectPortfolioHistoryStatus,
+  selectPortfolioTransactionsStatus,
 } from "../../store/portfolioSlice";
 import { resolveTokenForSwap } from "../../utils/tokenResolution";
 import { setPendingSwapFromToken } from "../../store/swapSlice";
 import { PortfolioHolding } from "../../api/portfolioApi";
 
-type TabType = "tokens" | "defi" | "activity";
+type TabType = "tokens" | "activity";
 
 const TIMEFRAMES: Timeframe[] = ["1D", "1W", "1M", "1Y", "ALL"];
 
@@ -100,56 +99,26 @@ export default function PortfolioScreen() {
   const chartData = useSelector(selectPortfolioChartData(reduxTimeframe));
   const transactions = useSelector(selectPortfolioTransactions);
   const swapHistory = useSelector(selectSwapHistory);
-  const defiPositions = useSelector(selectPortfolioDefi);
   const status = useSelector(selectPortfolioStatus);
   const isRefreshing = useSelector(selectPortfolioRefreshing);
   const portfolioError = useSelector(selectPortfolioError);
   const historyStatus = useSelector(selectPortfolioHistoryStatus);
+  const transactionsStatus = useSelector(selectPortfolioTransactionsStatus);
 
   const [selectedChainState, setSelectedChainState] = useState<Chain>(CHAINS[0]);
   const [chainModalVisible, setChainModalVisible] = useState(false);
   const [scrubPoint, setScrubPoint] = useState<{ time: string; value: number } | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("tokens");
 
-  // ─── Staggered Loading Strategy ───
-  // Phase 1 (immediate): Portfolio summary + holdings + DeFi (single API call)
-  // Phase 2 (2s delay):  On-chain transactions
-  // Phase 3 (lazy):      Swap history — only when Activity tab is selected
-  //
-  // This reduces the initial API burst from 4 concurrent calls to 2,
-  // spreading load to avoid CoinStats / CMC 429 rate-limit errors.
-
-  // Track whether swap history has been fetched for the current address+chain
+  // Track whether swap history & transactions have been fetched for current address+chain
   const [swapHistoryFetched, setSwapHistoryFetched] = useState(false);
 
-  // Phase 1: Immediate — Portfolio (summary + holdings + DeFi)
+  // Phase 1 (immediate): Portfolio summary + holdings
   useEffect(() => {
     if (activeAddress) {
       dispatch(fetchPortfolio({ chain: selectedChainState.id, address: activeAddress }));
     }
   }, [dispatch, activeAddress, selectedChainState.id]);
-
-  // Phase 2: Delayed — Transactions (2s after mount/change)
-  useEffect(() => {
-    if (!activeAddress) return;
-    const timer = setTimeout(() => {
-      dispatch(fetchPortfolioTransactions({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [dispatch, activeAddress, selectedChainState.id]);
-
-  // Phase 3: Lazy — Swap history only when Activity tab is selected
-  useEffect(() => {
-    if (activeTab === 'activity' && activeAddress && !swapHistoryFetched) {
-      dispatch(fetchSwapHistory({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
-      setSwapHistoryFetched(true);
-    }
-  }, [activeTab, activeAddress, selectedChainState.id, swapHistoryFetched, dispatch]);
-
-  // Reset swap history fetch flag when address or chain changes
-  useEffect(() => {
-    setSwapHistoryFetched(false);
-  }, [activeAddress, selectedChainState.id]);
 
   // Fetch portfolio chart when activeAddress, selectedChain, or timeframe changes
   useEffect(() => {
@@ -158,14 +127,18 @@ export default function PortfolioScreen() {
     }
   }, [dispatch, activeAddress, selectedChainState.id, reduxTimeframe]);
 
-  // App foreground active refresh: staggered resume — portfolio immediately, chart after 500ms
+  // Reset swap history fetch flag when address or chain changes
+  useEffect(() => {
+    setSwapHistoryFetched(false);
+  }, [activeAddress, selectedChainState.id]);
+
+  // App foreground active refresh: updates portfolio on resume
   useEffect(() => {
     if (!activeAddress) return;
 
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'active') {
         dispatch(fetchPortfolio({ chain: selectedChainState.id, address: activeAddress }));
-        // Stagger chart fetch slightly to avoid burst
         setTimeout(() => {
           dispatch(fetchPortfolioChart({ chain: selectedChainState.id, address: activeAddress, range: reduxTimeframe }));
         }, 500);
@@ -182,21 +155,29 @@ export default function PortfolioScreen() {
     }, [])
   );
 
+  // Tab switch handler: ONLY fetch swap history & transactions when user explicitly taps the tab!
+  const handleTabPress = useCallback((tab: TabType) => {
+    setActiveTab(tab);
+    if (tab === "activity" && activeAddress && !swapHistoryFetched) {
+      setSwapHistoryFetched(true);
+      dispatch(fetchSwapHistory({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
+      dispatch(fetchPortfolioTransactions({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
+    }
+  }, [activeAddress, selectedChainState.id, swapHistoryFetched, dispatch]);
+
   const onRefresh = useCallback(async () => {
     if (activeAddress) {
-      // Staggered pull-to-refresh: portfolio first, then chart after 500ms, transactions after 1.5s
       await dispatch(refreshPortfolio({ chain: selectedChainState.id, address: activeAddress }));
       setTimeout(() => {
         dispatch(fetchPortfolioChart({ chain: selectedChainState.id, address: activeAddress, range: reduxTimeframe }));
       }, 500);
-      setTimeout(() => {
-        dispatch(fetchPortfolioTransactions({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
-      }, 1500);
-      // Only refresh swap history if user is currently viewing it
+
+      // ONLY refresh swap history & transactions if user is actively viewing the Activity tab!
       if (activeTab === 'activity') {
         setTimeout(() => {
           dispatch(fetchSwapHistory({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
-        }, 2500);
+          dispatch(fetchPortfolioTransactions({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
+        }, 1200);
       }
     }
   }, [dispatch, activeAddress, selectedChainState.id, reduxTimeframe, activeTab]);
@@ -236,20 +217,16 @@ export default function PortfolioScreen() {
     dispatch(clearPortfolioData());
     setScrubPoint(null);
     setActiveTab("tokens");
+    setSwapHistoryFetched(false);
     setSelectedChainState(chain);
     dispatch(setSelectedChain(chain.id));
     setChainModalVisible(false);
 
-    // 2. Staggered fetch for the newly selected network
+    // 2. Fetch fresh portfolio data and chart for new network
+    // Swap history and transactions are NOT fetched until user taps the Swap History tab!
     if (activeAddress) {
-      // Phase 1: Portfolio + Chart immediately
       dispatch(fetchPortfolio({ chain: chain.id, address: activeAddress, forceRefresh: true }));
       dispatch(fetchPortfolioChart({ chain: chain.id, address: activeAddress, range: reduxTimeframe }));
-      // Phase 2: Transactions after 2s
-      setTimeout(() => {
-        dispatch(fetchPortfolioTransactions({ chain: chain.id, address: activeAddress, page: 1, limit: 20 }));
-      }, 2000);
-      // Swap history will lazy-load when Activity tab is opened (via swapHistoryFetched reset)
     }
   };
 
@@ -501,11 +478,11 @@ export default function PortfolioScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ═══ Segmented Tabs (Tokens / DeFi / Activity) ═══ */}
+        {/* ═══ Segmented Tabs (Holdings / Swap History) ═══ */}
         <View style={styles.tabContainer}>
           <TouchableOpacity
             style={[styles.tabButton, activeTab === "tokens" && styles.tabButtonActive]}
-            onPress={() => setActiveTab("tokens")}
+            onPress={() => handleTabPress("tokens")}
             activeOpacity={0.75}
           >
             <CoinsIcon
@@ -524,28 +501,8 @@ export default function PortfolioScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tabButton, activeTab === "defi" && styles.tabButtonActive]}
-            onPress={() => setActiveTab("defi")}
-            activeOpacity={0.75}
-          >
-            <YieldIcon
-              size={16}
-              color={activeTab === "defi" ? "#FFFFFF" : theme.colors.lightGrey}
-              strokeWidth={2}
-            />
-            <Text
-              style={[styles.tabText, activeTab === "defi" && styles.tabTextActive]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.82}
-            >
-              DeFi Yield ({defiPositions.length})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
             style={[styles.tabButton, activeTab === "activity" && styles.tabButtonActive]}
-            onPress={() => setActiveTab("activity")}
+            onPress={() => handleTabPress("activity")}
             activeOpacity={0.75}
           >
             <HistoryIcon
@@ -559,7 +516,7 @@ export default function PortfolioScreen() {
               adjustsFontSizeToFit
               minimumFontScale={0.82}
             >
-              Swap History ({combinedActivities.length})
+              Swap History {swapHistoryFetched ? `(${combinedActivities.length})` : ""}
             </Text>
           </TouchableOpacity>
         </View>
@@ -659,90 +616,10 @@ export default function PortfolioScreen() {
           </View>
         )}
 
-        {/* ═══ Tab 2: DeFi Positions ═══ */}
-        {activeTab === "defi" && (
-          <View style={styles.listCard}>
-            {defiPositions.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyTitle}>🚀 DeFi Tracking — Coming Soon</Text>
-                <Text style={styles.emptySubtitle}>
-                  We're building real-time DeFi position tracking for lending, staking, and liquidity pools on {selectedChainState.name}. Stay tuned!
-                </Text>
-                <View style={styles.defiSuggestions}>
-                  <Text style={styles.defiSuggestionsTitle}>
-                    POPULAR PROTOCOLS ON {selectedChainState.name.toUpperCase()}
-                  </Text>
-                  <View style={styles.defiTagsRow}>
-                    {(selectedChainState.id === "56"
-                      ? ["PancakeSwap", "Venus", "Alpaca", "Biswap"]
-                      : selectedChainState.id === "137"
-                      ? ["QuickSwap", "Aave V3", "Uniswap V3", "Balancer"]
-                      : selectedChainState.id === "42161"
-                      ? ["GMX", "Camelot", "Aave V3", "Radiant"]
-                      : selectedChainState.id === "8453"
-                      ? ["Aerodrome", "Moonwell", "Uniswap V3"]
-                      : ["Lido", "Aave V3", "Uniswap V3", "Curve", "Maker / Sky"]
-                    ).map((proto) => (
-                      <View key={proto} style={styles.defiTag}>
-                        <Text style={styles.defiTagText}>{proto}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-                <TouchableOpacity
-                  style={styles.emptyActionButton}
-                  onPress={handleNavigateSwap}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.emptyActionText}>Get Yield Tokens via Swap</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              defiPositions.map((pos, idx) => (
-                <View
-                  key={`${pos.protocol}-${pos.pool}-${idx}`}
-                  style={[
-                    styles.tokenRow,
-                    idx < defiPositions.length - 1 && styles.rowDivider,
-                  ]}
-                >
-                  <View style={styles.tokenLeft}>
-                    <BlockchainIcon symbol={pos.protocol} size={36} logoUrl={pos.icon} />
-                    <View style={styles.tokenInfoCol}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                        <Text style={styles.tokenSymbolText} numberOfLines={1}>{pos.protocol}</Text>
-                        <View style={styles.chainPill}>
-                          <Text style={styles.chainPillText}>{pos.type}</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.defiPoolText} numberOfLines={1}>{pos.pool}</Text>
-                      <Text style={styles.defiEarningsText} numberOfLines={1}>{pos.earnings}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.tokenRight}>
-                    <Text
-                      style={styles.tokenValueText}
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.75}
-                    >
-                      {pos.deposited}
-                    </Text>
-                    <View style={styles.apyBadge}>
-                      <Text style={styles.apyText} numberOfLines={1}>APY {pos.apy}</Text>
-                    </View>
-                  </View>
-                </View>
-              ))
-            )}
-          </View>
-        )}
-
-        {/* ═══ Tab 3: Swap Activity History (lazy-loaded) ═══ */}
+        {/* ═══ Tab 2: Swap Activity History (lazy-loaded on tab tap) ═══ */}
         {activeTab === "activity" && (
           <View style={styles.listCard}>
-            {historyStatus === 'loading' ? (
+            {((historyStatus === 'loading' || transactionsStatus === 'loading') && combinedActivities.length === 0) ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="small" color={theme.colors.primary} />
                 <Text style={styles.loadingText}>Loading swap history...</Text>
@@ -1056,43 +933,6 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       fontSize: 12,
       fontWeight: "700",
     },
-    defiSuggestions: {
-      marginTop: 10,
-      backgroundColor: theme.colors.dark,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      padding: 12,
-      borderRadius: 10,
-      width: "100%",
-      alignItems: "center",
-      gap: 6,
-    },
-    defiSuggestionsTitle: {
-      color: theme.colors.lightGrey,
-      fontSize: 10,
-      fontWeight: "700",
-      letterSpacing: 0.5,
-    },
-    defiTagsRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      justifyContent: "center",
-      gap: 6,
-      marginTop: 4,
-    },
-    defiTag: {
-      backgroundColor: "rgba(124, 58, 237, 0.12)",
-      borderWidth: 1,
-      borderColor: "rgba(124, 58, 237, 0.25)",
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 6,
-    },
-    defiTagText: {
-      color: theme.colors.primaryLight,
-      fontSize: 11,
-      fontWeight: "700",
-    },
     tokenRow: {
       flexDirection: "row",
       justifyContent: "space-between",
@@ -1169,18 +1009,6 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
       fontSize: 11,
       fontWeight: "700",
     },
-    defiPoolText: {
-      color: theme.colors.lightGrey,
-      fontSize: 12,
-      fontWeight: "500",
-      marginTop: 2,
-    },
-    defiEarningsText: {
-      color: theme.colors.success,
-      fontSize: 11,
-      fontWeight: "600",
-      marginTop: 2,
-    },
     tokenRight: {
       alignItems: "flex-end",
       gap: 2,
@@ -1193,19 +1021,6 @@ function createStyles(theme: ThemeType, insets: EdgeInsets) {
     tokenPriceText: {
       fontSize: 11,
       fontWeight: "600",
-    },
-    apyBadge: {
-      backgroundColor: "rgba(124, 58, 237, 0.12)",
-      borderWidth: 1,
-      borderColor: "rgba(124, 58, 237, 0.25)",
-      paddingHorizontal: 7,
-      paddingVertical: 3,
-      borderRadius: 6,
-    },
-    apyText: {
-      color: theme.colors.primaryLight,
-      fontSize: 10,
-      fontWeight: "700",
     },
     activityIconBox: {
       width: 36,
