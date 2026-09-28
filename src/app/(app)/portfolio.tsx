@@ -58,6 +58,7 @@ import {
   selectPortfolioRefreshing,
   selectPortfolioSelectedTimeframe,
   selectPortfolioError,
+  selectPortfolioHistoryStatus,
 } from "../../store/portfolioSlice";
 import { resolveTokenForSwap } from "../../utils/tokenResolution";
 import { setPendingSwapFromToken } from "../../store/swapSlice";
@@ -103,20 +104,52 @@ export default function PortfolioScreen() {
   const status = useSelector(selectPortfolioStatus);
   const isRefreshing = useSelector(selectPortfolioRefreshing);
   const portfolioError = useSelector(selectPortfolioError);
+  const historyStatus = useSelector(selectPortfolioHistoryStatus);
 
   const [selectedChainState, setSelectedChainState] = useState<Chain>(CHAINS[0]);
   const [chainModalVisible, setChainModalVisible] = useState(false);
   const [scrubPoint, setScrubPoint] = useState<{ time: string; value: number } | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("tokens");
 
-  // Fetch portfolio data and transactions when activeAddress or selectedChain changes
+  // ─── Staggered Loading Strategy ───
+  // Phase 1 (immediate): Portfolio summary + holdings + DeFi (single API call)
+  // Phase 2 (2s delay):  On-chain transactions
+  // Phase 3 (lazy):      Swap history — only when Activity tab is selected
+  //
+  // This reduces the initial API burst from 4 concurrent calls to 2,
+  // spreading load to avoid CoinStats / CMC 429 rate-limit errors.
+
+  // Track whether swap history has been fetched for the current address+chain
+  const [swapHistoryFetched, setSwapHistoryFetched] = useState(false);
+
+  // Phase 1: Immediate — Portfolio (summary + holdings + DeFi)
   useEffect(() => {
     if (activeAddress) {
       dispatch(fetchPortfolio({ chain: selectedChainState.id, address: activeAddress }));
-      dispatch(fetchPortfolioTransactions({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
-      dispatch(fetchSwapHistory({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
     }
   }, [dispatch, activeAddress, selectedChainState.id]);
+
+  // Phase 2: Delayed — Transactions (2s after mount/change)
+  useEffect(() => {
+    if (!activeAddress) return;
+    const timer = setTimeout(() => {
+      dispatch(fetchPortfolioTransactions({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [dispatch, activeAddress, selectedChainState.id]);
+
+  // Phase 3: Lazy — Swap history only when Activity tab is selected
+  useEffect(() => {
+    if (activeTab === 'activity' && activeAddress && !swapHistoryFetched) {
+      dispatch(fetchSwapHistory({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
+      setSwapHistoryFetched(true);
+    }
+  }, [activeTab, activeAddress, selectedChainState.id, swapHistoryFetched, dispatch]);
+
+  // Reset swap history fetch flag when address or chain changes
+  useEffect(() => {
+    setSwapHistoryFetched(false);
+  }, [activeAddress, selectedChainState.id]);
 
   // Fetch portfolio chart when activeAddress, selectedChain, or timeframe changes
   useEffect(() => {
@@ -125,14 +158,17 @@ export default function PortfolioScreen() {
     }
   }, [dispatch, activeAddress, selectedChainState.id, reduxTimeframe]);
 
-  // App foreground active refresh: updates portfolio using cache-first freshness on resume
+  // App foreground active refresh: staggered resume — portfolio immediately, chart after 500ms
   useEffect(() => {
     if (!activeAddress) return;
 
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'active') {
         dispatch(fetchPortfolio({ chain: selectedChainState.id, address: activeAddress }));
-        dispatch(fetchPortfolioChart({ chain: selectedChainState.id, address: activeAddress, range: reduxTimeframe }));
+        // Stagger chart fetch slightly to avoid burst
+        setTimeout(() => {
+          dispatch(fetchPortfolioChart({ chain: selectedChainState.id, address: activeAddress, range: reduxTimeframe }));
+        }, 500);
       }
     });
 
@@ -148,12 +184,22 @@ export default function PortfolioScreen() {
 
   const onRefresh = useCallback(async () => {
     if (activeAddress) {
+      // Staggered pull-to-refresh: portfolio first, then chart after 500ms, transactions after 1.5s
       await dispatch(refreshPortfolio({ chain: selectedChainState.id, address: activeAddress }));
-      dispatch(fetchPortfolioChart({ chain: selectedChainState.id, address: activeAddress, range: reduxTimeframe }));
-      dispatch(fetchPortfolioTransactions({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
-      dispatch(fetchSwapHistory({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
+      setTimeout(() => {
+        dispatch(fetchPortfolioChart({ chain: selectedChainState.id, address: activeAddress, range: reduxTimeframe }));
+      }, 500);
+      setTimeout(() => {
+        dispatch(fetchPortfolioTransactions({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
+      }, 1500);
+      // Only refresh swap history if user is currently viewing it
+      if (activeTab === 'activity') {
+        setTimeout(() => {
+          dispatch(fetchSwapHistory({ chain: selectedChainState.id, address: activeAddress, page: 1, limit: 20 }));
+        }, 2500);
+      }
     }
-  }, [dispatch, activeAddress, selectedChainState.id, reduxTimeframe]);
+  }, [dispatch, activeAddress, selectedChainState.id, reduxTimeframe, activeTab]);
 
   const handleNavigateSwap = async (holding?: PortfolioHolding | unknown) => {
     if (holding && typeof holding === "object" && "symbol" in holding) {
@@ -194,12 +240,16 @@ export default function PortfolioScreen() {
     dispatch(setSelectedChain(chain.id));
     setChainModalVisible(false);
 
-    // 2. Immediately fetch fresh on-chain portfolio data for the newly selected network
+    // 2. Staggered fetch for the newly selected network
     if (activeAddress) {
+      // Phase 1: Portfolio + Chart immediately
       dispatch(fetchPortfolio({ chain: chain.id, address: activeAddress, forceRefresh: true }));
       dispatch(fetchPortfolioChart({ chain: chain.id, address: activeAddress, range: reduxTimeframe }));
-      dispatch(fetchPortfolioTransactions({ chain: chain.id, address: activeAddress, page: 1, limit: 20 }));
-      dispatch(fetchSwapHistory({ chain: chain.id, address: activeAddress, page: 1, limit: 20 }));
+      // Phase 2: Transactions after 2s
+      setTimeout(() => {
+        dispatch(fetchPortfolioTransactions({ chain: chain.id, address: activeAddress, page: 1, limit: 20 }));
+      }, 2000);
+      // Swap history will lazy-load when Activity tab is opened (via swapHistoryFetched reset)
     }
   };
 
@@ -689,10 +739,15 @@ export default function PortfolioScreen() {
           </View>
         )}
 
-        {/* ═══ Tab 3: Swap Activity History ═══ */}
+        {/* ═══ Tab 3: Swap Activity History (lazy-loaded) ═══ */}
         {activeTab === "activity" && (
           <View style={styles.listCard}>
-            {combinedActivities.length === 0 ? (
+            {historyStatus === 'loading' ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <Text style={styles.loadingText}>Loading swap history...</Text>
+              </View>
+            ) : combinedActivities.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyTitle}>No Recent Activity</Text>
                 <Text style={styles.emptySubtitle}>
